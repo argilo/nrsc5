@@ -41,6 +41,10 @@ add_executable (
 
     strndup.c
 )
+add_executable (
+    aac_to_hdc
+    aac_to_hdc.c
+)
 target_link_libraries (
     nrsc5
     ${FAAD2_LIBRARY}
