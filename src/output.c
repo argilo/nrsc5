@@ -121,6 +121,7 @@ void audio_play(output_t *st, void *buffer)
 
 void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int program)
 {
+    if (program > st->max_program) st->max_program = program;
     if (program != st->program) return;
 
     st->audio_packets++;
@@ -146,11 +147,17 @@ void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int prog
     void *buffer;
     NeAACDecFrameInfo info;
 
+#ifdef USE_THREADS
+    pthread_mutex_lock(&st->mutex);
+#endif
     buffer = NeAACDecDecode(st->handle, &info, pkt, len);
     if (info.error > 0)
     {
         log_error("Decode error: %s", NeAACDecGetErrorMessage(info.error));
     }
+#ifdef USE_THREADS
+    pthread_mutex_unlock(&st->mutex);
+#endif
 
     if (info.error == 0 && info.samples > 0)
     {
@@ -235,9 +242,31 @@ static void *output_worker(void *arg)
 }
 #endif
 
+#if defined(USE_THREADS)
+static void *keyboard_worker(void *arg)
+{
+    output_t *st = arg;
+
+    while (1)
+    {
+        if (getchar() == '\n')
+        {
+            pthread_mutex_lock(&st->mutex);
+            st->program++;
+            if (st->program > st->max_program) st->program = 0;
+            output_reset(st);
+            pthread_mutex_unlock(&st->mutex);
+        }
+    }
+
+    return NULL;
+}
+#endif
+
 void output_begin(output_t *st)
 {
     st->first_audio_packet = 1;
+    st->max_program = 0;
 }
 
 void output_reset(output_t *st)
@@ -249,9 +278,6 @@ void output_reset(output_t *st)
 #ifdef USE_FAAD2
     if (st->method == OUTPUT_ADTS || st->method == OUTPUT_HDC)
         return;
-
-    if (st->handle)
-        NeAACDecClose(st->handle);
 
     unsigned long samprate = 22050;
     NeAACDecInitHDC(&st->handle, &samprate);
@@ -313,8 +339,10 @@ static void output_init_ao(output_t *st, int driver, const char *name)
     pthread_cond_init(&st->cond, NULL);
     pthread_mutex_init(&st->mutex, NULL);
     pthread_create(&st->worker_thread, NULL, output_worker, st);
+    pthread_create(&st->keyboard_thread, NULL, keyboard_worker, st);
 #ifdef HAVE_PTHREAD_SETNAME_NP
     pthread_setname_np(st->worker_thread, "output");
+    pthread_setname_np(st->keyboard_thread, "keyboard");
 #endif
 #endif
 

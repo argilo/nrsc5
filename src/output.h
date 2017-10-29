@@ -62,11 +62,12 @@ typedef struct
 #ifdef USE_THREADS
     output_buffer_t *head, *tail, *free;
     pthread_t worker_thread;
+    pthread_t keyboard_thread;
     pthread_mutex_t mutex;
     pthread_cond_t cond;
 #endif
 
-    unsigned int program;
+    unsigned int program, max_program;
     char *aas_files_path;
     aas_port_t ports[32];
     unsigned int first_audio_packet;
