@@ -20,6 +20,7 @@
 #include "defines.h"
 #include "input.h"
 #include "sync.h"
+#include "output.h"
 
 #define BUFS 4
 
@@ -183,6 +184,9 @@ void sync_process(sync_t *st, float complex *buffer)
     int i;
     static int psmi = 1;
     unsigned int partitions_per_band;
+
+    output_play(st->input->output);
+    output_play(st->input->output);
 
     switch (psmi) {
         case 2:

@@ -18,7 +18,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/time.h>
 
 #include "bitreader.h"
 #include "bitwriter.h"
@@ -85,41 +84,7 @@ static void dump_hdc(FILE *fp, uint8_t *pkt, unsigned int len)
     fflush(fp);
 }
 
-void output_reset_buffers(output_t *st)
-{
-#ifdef USE_THREADS
-    output_buffer_t *ob;
-
-    // find the end of the head list
-    for (ob = st->head; ob && ob->next; ob = ob->next) { }
-
-    // if the head list is non-empty, prepend to free list
-    if (ob != NULL)
-    {
-        ob->next = st->free;
-        st->free = st->head;
-    }
-
-    st->head = NULL;
-    st->tail = NULL;
-#endif
-}
-
-void audio_play(output_t *st, void *buffer)
-{
-    unsigned int i;
-    if (st->method == OUTPUT_LIVE && st->first_audio_packet)
-    {
-        uint8_t silence[AUDIO_FRAME_BYTES];
-        memset(silence, 0, sizeof(silence));
-        for (i = 0; i < LATENCY_FRAMES; i++)
-            ao_play(st->dev, (void *)silence, sizeof(silence));
-        st->first_audio_packet = 0;
-    }
-    ao_play(st->dev, buffer, AUDIO_FRAME_BYTES);
-}
-
-void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int program)
+void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int program, unsigned int seq)
 {
     if (program != st->program) return;
 
@@ -143,101 +108,64 @@ void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int prog
     }
 
 #ifdef USE_FAAD2
+    memcpy(st->packet[seq], pkt, len);
+    st->packet_len[seq] = len;
+#endif
+}
+
+void output_set_index(output_t *st, unsigned int program, unsigned int index)
+{
+    if (program != st->program) return;
+    st->audio_index = index;
+}
+
+void output_silence(output_t *st)
+{
+    ao_play(st->dev, (void *)st->silence, AUDIO_FRAME_BYTES);
+}
+
+void output_play(output_t *st)
+{
+    if (st->method == OUTPUT_ADTS || st->method == OUTPUT_HDC)
+        return;
+
+#ifdef USE_FAAD2
     void *buffer;
     NeAACDecFrameInfo info;
+    static int start_silence = 8;
 
-    buffer = NeAACDecDecode(st->handle, &info, pkt, len);
-    if (info.error > 0)
+    if (start_silence > 0)
     {
-        log_error("Decode error: %s", NeAACDecGetErrorMessage(info.error));
+        if (st->packet_len[st->audio_index] == 0)
+            return;
+        while (start_silence--)
+            output_silence(st);
     }
 
-    if (info.error == 0 && info.samples > 0)
+    if (st->packet_len[st->audio_index] == 0)
     {
-        unsigned int bytes = info.samples * sample_format.bits / 8;
-        output_buffer_t *ob;
-
-        assert(bytes == AUDIO_FRAME_BYTES);
-
-#ifdef USE_THREADS
-        struct timespec ts;
-        struct timeval now;
-        gettimeofday(&now, NULL);
-        ts.tv_sec = now.tv_sec;
-        ts.tv_nsec = (now.tv_usec + 100000) * 1000;
-        if (ts.tv_nsec >= 1000000000)
+        output_silence(st);
+    }
+    else
+    {
+        buffer = NeAACDecDecode(st->handle, &info, st->packet[st->audio_index], st->packet_len[st->audio_index]);
+        if (info.error > 0)
         {
-            ts.tv_nsec -= 1000000000;
-            ts.tv_sec += 1;
+            log_error("Decode error: %s", NeAACDecGetErrorMessage(info.error));
+            output_silence(st);
         }
 
-        pthread_mutex_lock(&st->mutex);
-        while (st->free == NULL)
+        if (info.error == 0 && info.samples > 0)
         {
-            if (pthread_cond_timedwait(&st->cond, &st->mutex, &ts) == ETIMEDOUT)
-            {
-                log_warn("Audio output timed out, dropping samples");
-                output_reset_buffers(st);
-            }
+            unsigned int bytes = info.samples * sample_format.bits / 8;
+            assert(bytes == AUDIO_FRAME_BYTES);
+            ao_play(st->dev, buffer, AUDIO_FRAME_BYTES);
         }
-        ob = st->free;
-        st->free = ob->next;
-        pthread_mutex_unlock(&st->mutex);
-
-        memcpy(ob->data, buffer, bytes);
-
-        pthread_mutex_lock(&st->mutex);
-        ob->next = NULL;
-        if (st->tail)
-            st->tail->next = ob;
-        else
-            st->head = ob;
-        st->tail = ob;
-        pthread_mutex_unlock(&st->mutex);
-        pthread_cond_signal(&st->cond);
-#else
-        audio_play(st, buffer);
-#endif
-    }
-#endif
-}
-
-#if defined(USE_FAAD2) && defined(USE_THREADS)
-static void *output_worker(void *arg)
-{
-    output_t *st = arg;
-
-    while (1)
-    {
-        output_buffer_t *ob;
-
-        pthread_mutex_lock(&st->mutex);
-        while (st->head == NULL)
-            pthread_cond_wait(&st->cond, &st->mutex);
-        // unlink from head list
-        ob = st->head;
-        st->head = ob->next;
-        if (st->head == NULL)
-            st->tail = NULL;
-        pthread_mutex_unlock(&st->mutex);
-
-        audio_play(st, ob->data);
-
-        pthread_mutex_lock(&st->mutex);
-        // add to free list
-        ob->next = st->free;
-        st->free = ob;
-        pthread_mutex_unlock(&st->mutex);
-        pthread_cond_signal(&st->cond);
     }
 
-    return NULL;
-}
+    st->packet_len[st->audio_index++] = 0;
+    st->audio_index &= 0x3f;
 #endif
-
-void output_begin(output_t *st)
-{
-    st->first_audio_packet = 1;
 }
 
 void output_reset(output_t *st)
@@ -245,6 +173,7 @@ void output_reset(output_t *st)
     memset(st->ports, 0, sizeof(st->ports));
     st->audio_packets = 0;
     st->audio_bytes = 0;
+    st->audio_index = 0;
 
 #ifdef USE_FAAD2
     if (st->method == OUTPUT_ADTS || st->method == OUTPUT_HDC)
@@ -255,8 +184,7 @@ void output_reset(output_t *st)
 
     unsigned long samprate = 22050;
     NeAACDecInitHDC(&st->handle, &samprate);
-
-    output_reset_buffers(st);
+    memset(st->silence, 0, sizeof(st->silence));
 #endif
 }
 
@@ -298,25 +226,8 @@ static void output_init_ao(output_t *st, int driver, const char *name)
     if (st->dev == NULL)
         FATAL_EXIT("Unable to open output wav file.");
 
-#ifdef USE_THREADS
-    st->head = NULL;
-    st->tail = NULL;
-    st->free = NULL;
-
-    for (i = 0; i < 32; ++i)
-    {
-        output_buffer_t *ob = malloc(sizeof(output_buffer_t));
-        ob->next = st->free;
-        st->free = ob;
-    }
-
-    pthread_cond_init(&st->cond, NULL);
-    pthread_mutex_init(&st->mutex, NULL);
-    pthread_create(&st->worker_thread, NULL, output_worker, st);
-#ifdef HAVE_PTHREAD_SETNAME_NP
-    pthread_setname_np(st->worker_thread, "output");
-#endif
-#endif
+    for (i = 0; i < AUDIO_BUFFER_FRAMES; i++)
+        st->packet_len[i] = 0;
 
     st->handle = NULL;
     output_reset(st);

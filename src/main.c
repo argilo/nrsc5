@@ -34,8 +34,8 @@
 #include "defines.h"
 #include "input.h"
 
-#define RADIO_BUFCNT (8)
-#define RADIO_BUFFER (512 * 1024)
+#define RADIO_BUFCNT (256)
+#define RADIO_BUFFER (32 * 512)
 
 static int gain_list[128];
 static int gain_index, gain_count;

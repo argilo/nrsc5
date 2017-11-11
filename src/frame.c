@@ -19,6 +19,7 @@
 #include "frame.h"
 #include "input.h"
 #include "reed-solomon.h"
+#include "output.h"
 
 #define PCI_AUDIO 0x38D8D3
 #define PCI_AUDIO_FIXED 0xE3634C
@@ -33,6 +34,7 @@ typedef struct
     unsigned int codec;
     unsigned int stream_id;
     unsigned int pdu_seq;
+    unsigned int latency;
     unsigned int pfirst;
     unsigned int plast;
     unsigned int seq;
@@ -51,6 +53,16 @@ typedef struct
     unsigned int applied_services;
     unsigned int pdu_marker;
 } hef_t;
+
+// 1017s.pdf Table 5-2
+static unsigned int lc_bits_table[16][2] = {
+    {16, 16}, {12, 16}, {12, 16}, {12, 16}, { 0,  0}, { 0,  0}, { 0,  0}, { 0,  0},
+    { 0,  0}, { 0,  0}, {12, 12}, { 0,  0}, { 0,  0}, {12, 12}, { 0,  0}, { 0,  0}
+};
+static unsigned int packets_per_pdu_table[16][2] = {
+    {32, 32}, { 4, 32}, { 4, 32}, { 4, 32}, { 0,  0}, { 0,  0}, { 0,  0}, { 0,  0},
+    { 0,  0}, { 0,  0}, {32,  4}, { 0,  0}, { 0,  0}, { 4,  4}, { 0,  0}, { 0,  0}
+};
 
 static const uint8_t crc8_tab[] = {
     0, 0x31, 0x62, 0x53, 0xC4, 0xF5, 0xA6, 0x97, 0xB9,
@@ -168,6 +180,7 @@ static void parse_header(uint8_t *buf, frame_header_t *hdr)
     hdr->codec = buf[8] & 0xf;
     hdr->stream_id = (buf[8] >> 4) & 0x3;
     hdr->pdu_seq = (buf[8] >> 6) | ((buf[9] & 1) << 2);
+    hdr->latency = (buf[10] >> 6) | ((buf[11] & 1) << 2);
     hdr->pfirst = (buf[11] >> 1) & 1;
     hdr->plast = (buf[11] >> 2) & 1;
     hdr->seq = (buf[11] >> 3) | ((buf[12] & 1) << 5);
@@ -245,28 +258,6 @@ static unsigned int parse_hef(uint8_t *buf, unsigned int length, hef_t *hef)
     return byte - buf;
 }
 
-static unsigned int calc_lc_bits(frame_header_t *hdr)
-{
-    switch(hdr->codec)
-    {
-    case 0:
-        return 16;
-    case 1:
-    case 2:
-    case 3:
-        if (hdr->stream_id == 0)
-            return 12;
-        else
-            return 16;
-    case 10:
-    case 13:
-        return 12;
-    default:
-        log_warn("unknown codec field (%d)", hdr->codec);
-        return 16;
-    }
-}
-
 static unsigned int parse_location(uint8_t *buf, unsigned int lc_bits, unsigned int i)
 {
     if (lc_bits == 16)
@@ -314,7 +305,7 @@ static void aas_push(frame_t *st, uint8_t* psd, int length)
     else
     {
         // remove protocol and fcs fields
-        input_aas_push(st->input, psd + 1, length - 2);
+        output_aas_push(st->input->output, psd + 1, length - 2);
     }
 }
 
@@ -453,7 +444,7 @@ static void process_fixed_data(frame_t *st)
 
 void frame_process(frame_t *st, size_t length)
 {
-    int offset = 0;
+    int offset = 0, seq, out_index;
 
     if (has_fixed(st))
         process_fixed_data(st);
@@ -471,7 +462,7 @@ void frame_process(frame_t *st, size_t length)
 
         parse_header(st->buffer + offset, &hdr);
         offset += 14;
-        lc_bits = calc_lc_bits(&hdr);
+        lc_bits = lc_bits_table[hdr.codec][hdr.stream_id];
         loc_bytes = ((lc_bits * hdr.nop) + 4) / 8;
         if (start + hdr.la_location < offset + loc_bytes || start + hdr.la_location >= length)
             return;
@@ -492,40 +483,47 @@ void frame_process(frame_t *st, size_t length)
         parse_hdlc(st, aas_push, st->psd_buf[prog], &st->psd_idx[prog], MAX_AAS_LEN, st->buffer + offset, start + hdr.la_location + 1 - offset);
         offset = start + hdr.la_location + 1;
 
+        seq = (hdr.seq - hdr.pfirst) & 0x3f;
         for (j = 0; j < hdr.nop; ++j)
         {
             unsigned int cnt = start + locations[j] - offset;
             if (crc8(st->buffer + offset, cnt + 1) != 0)
             {
                 log_warn("crc mismatch!");
-                offset += cnt + 1;
-                continue;
-            }
-
-            if (j == 0 && hdr.pfirst)
-            {
-                if (st->pdu_idx[prog])
-                {
-                    memcpy(&st->pdu[prog][st->pdu_idx[prog]], st->buffer + offset, cnt);
-                    input_pdu_push(st->input, st->pdu[prog], cnt + st->pdu_idx[prog], prog);
-                }
-                else
-                {
-                    log_debug("ignoring partial pdu");
-                }
-            }
-            else if (j == hdr.nop - 1 && hdr.plast)
-            {
-                memcpy(st->pdu[prog], st->buffer + offset, cnt);
-                st->pdu_idx[prog] = cnt;
             }
             else
             {
-                input_pdu_push(st->input, st->buffer + offset, cnt, prog);
+                if (j == 0 && hdr.pfirst)
+                {
+                    if (st->pdu_idx[prog])
+                    {
+                        memcpy(&st->pdu[prog][st->pdu_idx[prog]], st->buffer + offset, cnt);
+                        output_push(st->input->output, st->pdu[prog], cnt + st->pdu_idx[prog], prog, seq);
+                    }
+                    else
+                    {
+                        log_debug("ignoring partial pdu");
+                    }
+                }
+                else if (j == hdr.nop - 1 && hdr.plast)
+                {
+                    memcpy(st->pdu[prog], st->buffer + offset, cnt);
+                    st->pdu_idx[prog] = cnt;
+                }
+                else
+                {
+                    output_push(st->input->output, st->buffer + offset, cnt, prog, seq);
+                }
             }
 
             offset += cnt + 1;
+            seq = (seq + 1) & 0x3f;
         }
+
+        out_index = hdr.pdu_seq * packets_per_pdu_table[hdr.codec][hdr.stream_id];
+        out_index ^= (out_index - hdr.seq) & 0x20;
+        out_index = (out_index - hdr.latency * 2) & 0x3f;
+        output_set_index(st->input->output, prog, out_index);
     }
 
 }

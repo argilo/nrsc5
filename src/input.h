@@ -55,5 +55,3 @@ void input_set_snr_callback(input_t *st, input_snr_cb_t cb, void *);
 void input_cfo_adjust(input_t *st, int cfo);
 void input_set_skip(input_t *st, unsigned int skip);
 void input_wait(input_t *st, int flush);
-void input_pdu_push(input_t *st, uint8_t *pdu, unsigned int len, unsigned int program);
-void input_aas_push(input_t *st, uint8_t *psd, unsigned int len);

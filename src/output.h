@@ -7,12 +7,8 @@
 #include <neaacdec.h>
 #endif
 
-#ifdef USE_THREADS
-#include <pthread.h>
-#endif
-
 #define AUDIO_FRAME_BYTES 8192
-#define LATENCY_FRAMES 10
+#define AUDIO_BUFFER_FRAMES 64
 #define MAX_PORTS 32
 
 typedef enum
@@ -22,12 +18,6 @@ typedef enum
     OUTPUT_WAV,
     OUTPUT_LIVE
 } output_method_t;
-
-typedef struct output_buffer_t
-{
-    struct output_buffer_t *next;
-    uint8_t data[AUDIO_FRAME_BYTES];
-} output_buffer_t;
 
 typedef struct
 {
@@ -58,24 +48,22 @@ typedef struct
 #ifdef HAVE_FAAD2
     ao_device *dev;
     NeAACDecHandle handle;
-#endif
-#ifdef USE_THREADS
-    output_buffer_t *head, *tail, *free;
-    pthread_t worker_thread;
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
+    uint8_t packet[AUDIO_BUFFER_FRAMES][AUDIO_FRAME_BYTES];
+    unsigned int packet_len[AUDIO_BUFFER_FRAMES];
+    uint8_t silence[AUDIO_FRAME_BYTES];
 #endif
 
     unsigned int program;
     char *aas_files_path;
     aas_port_t ports[32];
-    unsigned int first_audio_packet;
     unsigned int audio_packets;
     unsigned int audio_bytes;
+    unsigned int audio_index;
 } output_t;
 
-void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int program);
-void output_begin(output_t *st);
+void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int program, unsigned int seq);
+void output_set_index(output_t *st, unsigned int program, unsigned int index);
+void output_play(output_t *st);
 void output_reset(output_t *st);
 void output_init_adts(output_t *st, const char *name);
 void output_init_hdc(output_t *st, const char *name);

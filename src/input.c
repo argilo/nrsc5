@@ -132,11 +132,6 @@ static void *input_worker(void *arg)
 }
 #endif
 
-void input_pdu_push(input_t *st, uint8_t *pdu, unsigned int len, unsigned int program)
-{
-    output_push(st->output, pdu, len, program);
-}
-
 void input_set_skip(input_t *st, unsigned int skip)
 {
     st->skip += skip;
@@ -341,9 +336,4 @@ void input_init(input_t *st, output_t *output, double center, unsigned int progr
     frame_init(&st->frame, st);
     output_set_program(st->output, program);
     sync_init(&st->sync, st);
-}
-
-void input_aas_push(input_t *st, uint8_t *psd, unsigned int len)
-{
-    output_aas_push(st->output, psd, len);
 }
