@@ -10,7 +10,7 @@ configure_file (config.h.in config.h)
 include_directories ("${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/include")
 
 add_library (
-    nrsc5
+    nrsc5 SHARED
     acquire.c
     decode.c
     frame.c
@@ -31,6 +31,7 @@ add_library (
 
     strndup.c
 )
+set_target_properties(nrsc5 PROPERTIES PUBLIC_HEADER "../include/nrsc5.h")
 target_link_libraries (
     nrsc5
     ${FAAD2_LIBRARY}
@@ -53,6 +54,8 @@ target_link_libraries (
 )
 
 install (
-    TARGETS app
+    TARGETS app nrsc5
     RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    PUBLIC_HEADER DESTINATION include
 )

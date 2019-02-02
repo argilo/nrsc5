@@ -17,6 +17,7 @@ The following packages are required:
      $ cmake [options] ..
      $ make
      $ sudo make install
+     $ sudo ldconfig
 
 Available build options:
 
