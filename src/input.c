@@ -57,11 +57,6 @@ static void input_push_to_acquire(input_t *st)
     st->used += acquire_push(&st->acq, &st->buffer[st->used], st->avail - st->used);
 }
 
-void input_pdu_push(input_t *st, uint8_t *pdu, unsigned int len, unsigned int program)
-{
-    output_push(st->output, pdu, len, program);
-}
-
 void input_set_skip(input_t *st, unsigned int skip)
 {
     st->skip += skip;
@@ -139,13 +134,15 @@ int input_shift(input_t *st, unsigned int cnt)
     return 0;
 }
 
-void input_push(input_t *st)
+static void input_push(input_t *st, uint32_t len)
 {
     while (st->avail - st->used >= FFTCP)
     {
         input_push_to_acquire(st);
-        acquire_process(&st->acq);
+        acquire_process(&st->acq, st->avail - st->used);
     }
+
+    output_advance(st->output, len);
 }
 
 void input_push_cu8(input_t *st, uint8_t *buf, uint32_t len)
@@ -176,7 +173,7 @@ void input_push_cu8(input_t *st, uint8_t *buf, uint32_t len)
         halfband_q15_execute(st->decim, x, &st->buffer[st->avail++]);
     }
 
-    input_push(st);
+    input_push(st, len / 4);
 }
 
 void input_push_cs16(input_t *st, int16_t *buf, uint32_t len)
@@ -189,7 +186,7 @@ void input_push_cs16(input_t *st, int16_t *buf, uint32_t len)
     memcpy(&st->buffer[st->avail], buf, len * sizeof(int16_t));
     st->avail += len / 2;
 
-    input_push(st);
+    input_push(st, len / 2);
 }
 
 void input_set_snr_callback(input_t *st, input_snr_cb_t cb, void *arg)
@@ -255,9 +252,4 @@ void input_set_sync_state(input_t *st, unsigned int new_state)
         nrsc5_report_sync(st->radio);
 
     st->sync_state = new_state;
-}
-
-void input_aas_push(input_t *st, uint8_t *psd, unsigned int len)
-{
-    output_aas_push(st->output, psd, len);
 }

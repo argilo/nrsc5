@@ -166,7 +166,7 @@ float phase_diff(float a, float b)
     return diff;
 }
 
-void sync_process(sync_t *st)
+static void sync_process(sync_t *st)
 {
     int i, partitions_per_band;
     static int psmi = 1;
@@ -392,7 +392,7 @@ void sync_adjust(sync_t *st, int sample_adj)
     }
 }
 
-void sync_push(sync_t *st, float complex *fftout)
+void sync_push(sync_t *st, float complex *fftout, unsigned int samples_left)
 {
     unsigned int i;
     for (i = 0; i < MAX_PARTITIONS * PARTITION_WIDTH + 1; i++)
@@ -405,6 +405,7 @@ void sync_push(sync_t *st, float complex *fftout)
     {
         st->idx = 0;
 
+        output_set_samples_left(st->input->output, samples_left);
         sync_process(st);
     }
 }

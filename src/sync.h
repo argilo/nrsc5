@@ -25,6 +25,6 @@ typedef struct
 } sync_t;
 
 void sync_adjust(sync_t *st, int sample_adj);
-void sync_push(sync_t *st, float complex *fft);
+void sync_push(sync_t *st, float complex *fft, unsigned int samples_left);
 void sync_reset(sync_t *st);
 void sync_init(sync_t *st, struct input_t *input);

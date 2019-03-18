@@ -326,7 +326,7 @@ static void aas_push(frame_t *st, uint8_t* psd, unsigned int length)
     else
     {
         // remove protocol and fcs fields
-        input_aas_push(st->input, psd + 1, length - 3);
+        output_aas_push(st->input->output, psd + 1, length - 3);
     }
 }
 
@@ -475,7 +475,7 @@ void frame_process(frame_t *st, size_t length)
     while (offset < audio_end - RS_CODEWORD_LEN)
     {
         unsigned int start = offset;
-        unsigned int j, lc_bits, loc_bytes, prog;
+        unsigned int j, lc_bits, loc_bytes, prog, seq;
         unsigned short locations[MAX_AUDIO_PACKETS];
         frame_header_t hdr = {0};
         hef_t hef = {0};
@@ -511,6 +511,23 @@ void frame_process(frame_t *st, size_t length)
         parse_hdlc(st, aas_push, st->psd_buf[prog], &st->psd_idx[prog], MAX_AAS_LEN, st->buffer + offset, start + hdr.la_location + 1 - offset);
         offset = start + hdr.la_location + 1;
 
+        if (hdr.codec == 0)
+        {
+            output_align(st->input->output, prog, ((hdr.pdu_seq * 32) + 32) % 64);
+        }
+        else if (hdr.codec == 13)
+        {
+            unsigned int offset = hdr.pdu_seq * 4;
+            if (((offset + 64 - hdr.seq) % 64) < 32)
+                offset += 32;
+            output_align(st->input->output, prog, offset);
+        }
+        else
+        {
+            log_warn("unsupported codec: %d", hdr.codec);
+        }
+
+        seq = hdr.seq;
         for (j = 0; j < hdr.nop; ++j)
         {
             unsigned int cnt = start + locations[j] - offset;
@@ -523,10 +540,11 @@ void frame_process(frame_t *st, size_t length)
 
             if (j == 0 && hdr.pfirst)
             {
+                seq = (seq + 63) % 64;
                 if (st->pdu_idx[prog])
                 {
                     memcpy(&st->pdu[prog][st->pdu_idx[prog]], st->buffer + offset, cnt);
-                    input_pdu_push(st->input, st->pdu[prog], cnt + st->pdu_idx[prog], prog);
+                    output_push(st->input->output, st->pdu[prog], cnt + st->pdu_idx[prog], prog, seq);
                 }
                 else
                 {
@@ -540,10 +558,11 @@ void frame_process(frame_t *st, size_t length)
             }
             else
             {
-                input_pdu_push(st->input, st->buffer + offset, cnt, prog);
+                output_push(st->input->output, st->buffer + offset, cnt, prog, seq);
             }
 
             offset += cnt + 1;
+            seq = (seq + 1) % 64;
         }
     }
 

@@ -8,7 +8,7 @@
 #include <neaacdec.h>
 #endif
 
-#define AUDIO_FRAME_BYTES 8192
+#define AUDIO_FRAME_SAMPLES 2048
 #define MAX_PORTS 32
 #define MAX_SIG_SERVICES 8
 #define MAX_SIG_COMPONENTS 8
@@ -127,12 +127,19 @@ typedef struct
     nrsc5_t *radio;
 #ifdef HAVE_FAAD2
     NeAACDecHandle aacdec[MAX_PROGRAMS];
+    int16_t audio_buffer[MAX_PROGRAMS][64 * 2 * AUDIO_FRAME_SAMPLES];
 #endif
+    unsigned int samples_left;
+    int sample_offset[MAX_PROGRAMS];
+    int target_sample_offset[MAX_PROGRAMS];
     aas_port_t ports[MAX_PORTS];
     sig_service_t services[MAX_SIG_SERVICES];
 } output_t;
 
-void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int program);
+void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int program, unsigned int seq);
+void output_set_samples_left(output_t *st, unsigned int samples_left);
+void output_align(output_t *st, unsigned int program, unsigned int seq);
+void output_advance(output_t *st, unsigned int samples);
 void output_begin(output_t *st);
 void output_reset(output_t *st);
 void output_init(output_t *st, nrsc5_t *);

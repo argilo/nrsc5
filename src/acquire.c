@@ -57,7 +57,7 @@ static float filter_taps[] = {
     0
 };
 
-void acquire_process(acquire_t *st)
+void acquire_process(acquire_t *st, unsigned int samples_left)
 {
     float complex max_v = 0, phase_increment;
     float angle, angle_diff, angle_factor, max_mag = -1.0f;
@@ -145,7 +145,7 @@ void acquire_process(acquire_t *st)
 
         fftwf_execute(st->fft);
         fftshift(st->fftout, FFT);
-        sync_push(&st->input->sync, st->fftout);
+        sync_push(&st->input->sync, st->fftout, samples_left + FFTCP - samperr);
     }
 
     keep = FFTCP + (FFTCP / 2 - samperr);

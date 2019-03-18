@@ -22,7 +22,7 @@ typedef struct
     int cfo;
 } acquire_t;
 
-void acquire_process(acquire_t *st);
+void acquire_process(acquire_t *st, unsigned int samples_left);
 void acquire_cfo_adjust(acquire_t *st, int cfo);
 unsigned int acquire_push(acquire_t *st, cint16_t *buf, unsigned int length);
 void acquire_reset(acquire_t *st);

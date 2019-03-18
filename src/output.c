@@ -26,7 +26,7 @@
 #include "private.h"
 #include "unicode.h"
 
-void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int program)
+void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int program, unsigned int seq)
 {
     nrsc5_report_hdc(st->radio, program, pkt, len);
 
@@ -45,8 +45,62 @@ void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int prog
         log_error("Decode error: %s", NeAACDecGetErrorMessage(info.error));
 
     if (info.error == 0 && info.samples > 0)
-        nrsc5_report_audio(st->radio, program, buffer, info.samples);
+        memcpy(&st->audio_buffer[program][seq * 2 * AUDIO_FRAME_SAMPLES], buffer, info.samples * sizeof(int16_t));
 #endif
+}
+
+void output_set_samples_left(output_t *st, unsigned int samples_left)
+{
+    st->samples_left = samples_left;
+}
+
+void output_align(output_t *st, unsigned int program, unsigned int seq)
+{
+    seq = (seq + 0) % 64;
+    st->target_sample_offset[program] = seq * 2160 * 16 + st->samples_left;
+}
+
+void output_advance(output_t *st, unsigned int samples)
+{
+    unsigned int i;
+
+    for (i = 0; i < MAX_PROGRAMS; i++)
+    {
+        int start_sample_offset = st->sample_offset[i];
+
+        if (st->target_sample_offset[i] != -1)
+        {
+            int error;
+
+            st->sample_offset[i] = st->target_sample_offset[i] % (2160 * 1024);
+            st->target_sample_offset[i] = -1;
+
+            error = (st->sample_offset[i] + (2160 * 1536) - samples - start_sample_offset) % (2160 * 1024) - (2160 * 512);
+            if (error <= -256 || error >= 256)
+            {
+                start_sample_offset = (st->sample_offset[i] + (2160 * 1024) - samples) % (2160 * 1024);
+            }
+        }
+        else
+        {
+            st->sample_offset[i] = (st->sample_offset[i] + samples) % (2160 * 1024);
+        }
+
+        int start_audio_sample = start_sample_offset * 8 / 135;
+        int end_audio_sample = st->sample_offset[i] * 8 / 135;
+        if (st->sample_offset[i] < start_sample_offset)
+        {
+            nrsc5_report_audio(st->radio, i, &st->audio_buffer[i][start_audio_sample * 2], (64 * AUDIO_FRAME_SAMPLES - start_audio_sample) * 2);
+            memset(&st->audio_buffer[i][start_audio_sample * 2], 0, (64 * AUDIO_FRAME_SAMPLES - start_audio_sample) * 2 * sizeof(int16_t));
+            nrsc5_report_audio(st->radio, i, &st->audio_buffer[i][0], end_audio_sample * 2);
+            memset(&st->audio_buffer[i][0], 0, end_audio_sample * 2 * sizeof(int16_t));
+        }
+        else
+        {
+            nrsc5_report_audio(st->radio, i, &st->audio_buffer[i][start_audio_sample * 2], (end_audio_sample - start_audio_sample) * 2);
+            memset(&st->audio_buffer[i][start_audio_sample * 2], 0, (end_audio_sample - start_audio_sample) * 2 * sizeof(int16_t));
+        }
+    }
 }
 
 static void aas_free_lot(aas_file_t *file)
@@ -99,6 +153,8 @@ void output_reset(output_t *st)
         if (st->aacdec[i])
             NeAACDecClose(st->aacdec[i]);
         st->aacdec[i] = NULL;
+        st->sample_offset[i] = 0;
+        st->target_sample_offset[i] = -1;
     }
 #endif
 }
