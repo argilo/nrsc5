@@ -1,7 +1,12 @@
 /build/
 /build-win32/
 /build-win64/
+
 __pycache__
+/python/aas/
+/python/map/
+/python/config.json
+/python/station_logos.json
 
 # Swap
 [._]*.s[a-v][a-z]
