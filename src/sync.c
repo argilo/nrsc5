@@ -32,7 +32,7 @@
 static void adjust_ref(sync_t *st, unsigned int ref, int cfo)
 {
     unsigned int n;
-    float cfo_freq = 2 * M_PI * cfo * CP / FFT;
+    float cfo_freq = 2 * M_PI * cfo * CP_FM / FFT_FM;
 
     // sync bits (after DBPSK)
     static const signed char sync[] = {
@@ -210,7 +210,7 @@ void detect_cfo(sync_t *st)
         if (best_offset >= 0 && best_count >= 3)
         {
             // At least three offsets matched, so this is likely the correct CFO.
-            input_set_skip(st->input, best_offset * FFTCP);
+            input_set_skip(st->input, best_offset * FFTCP_FM);
             acquire_cfo_adjust(&st->input->acq, cfo);
 
             log_debug("Block @ %d", best_offset);
@@ -290,25 +290,25 @@ void sync_process(sync_t *st)
             samperr += phase_diff(st->phases[LB_START + i][0], st->phases[LB_START + i + PARTITION_WIDTH][0]);
             samperr += phase_diff(st->phases[UB_END - i - PARTITION_WIDTH][0], st->phases[UB_END - i][0]);
         }
-        samperr = samperr / (partitions_per_band * 2) * FFT / PARTITION_WIDTH / (2 * M_PI);
+        samperr = samperr / (partitions_per_band * 2) * FFT_FM / PARTITION_WIDTH / (2 * M_PI);
 
         for (i = 0; i < partitions_per_band * PARTITION_WIDTH + 1; i += PARTITION_WIDTH)
         {
             float x, y;
 
-            x = LB_START + i - (FFT / 2);
+            x = LB_START + i - (FFT_FM / 2);
             y = st->costas_freq[LB_START + i];
             angle += y;
             sum_xy += x * y;
             sum_x2 += x * x;
 
-            x = UB_END - i - (FFT / 2);
+            x = UB_END - i - (FFT_FM / 2);
             y = st->costas_freq[UB_END - i];
             angle += y;
             sum_xy += x * y;
             sum_x2 += x * x;
         }
-        samperr -= (sum_xy / sum_x2) * FFT / (2 * M_PI) * ACQUIRE_SYMBOLS;
+        samperr -= (sum_xy / sum_x2) * FFT_FM / (2 * M_PI) * ACQUIRE_SYMBOLS;
         st->samperr = roundf(samperr);
 
         angle /= (partitions_per_band + 1) * 2;
@@ -413,8 +413,8 @@ void sync_adjust(sync_t *st, int sample_adj)
     int i;
     for (i = 0; i < MAX_PARTITIONS * PARTITION_WIDTH + 1; i++)
     {
-        st->costas_phase[LB_START + i] -= sample_adj * (LB_START + i - (FFT / 2)) * 2 * M_PI / FFT;
-        st->costas_phase[UB_END - i] -= sample_adj * (UB_END - i - (FFT / 2)) * 2 * M_PI / FFT;
+        st->costas_phase[LB_START + i] -= sample_adj * (LB_START + i - (FFT_FM / 2)) * 2 * M_PI / FFT_FM;
+        st->costas_phase[UB_END - i] -= sample_adj * (UB_END - i - (FFT_FM / 2)) * 2 * M_PI / FFT_FM;
     }
 }
 
@@ -438,7 +438,7 @@ void sync_push(sync_t *st, float complex *fftout)
 void sync_reset(sync_t *st)
 {
     unsigned int i;
-    for (i = 0; i < FFT; i++)
+    for (i = 0; i < FFT_FM; i++)
     {
         st->costas_freq[i] = 0;
         st->costas_phase[i] = 0;

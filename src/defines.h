@@ -13,18 +13,21 @@
 // Sample rate before decimation
 #define SAMPLE_RATE 1488375
 // FFT length in samples
-#define FFT 2048
+#define FFT_FM 2048
+#define FFT_AM 256
 // cyclic preflex length in samples
-#define CP 112
-#define FFTCP (FFT + CP)
+#define CP_FM 112
+#define CP_AM 14
+#define FFTCP_FM (FFT_FM + CP_FM)
+#define FFTCP_AM (FFT_AM + CP_AM)
 // OFDM symbols per L1 block
 #define BLKSZ 32
 // symbols processed by each invocation of acquire_process
 #define ACQUIRE_SYMBOLS (BLKSZ * 2)
 // index of first lower sideband subcarrier
-#define LB_START ((FFT / 2) - 546)
+#define LB_START ((FFT_FM / 2) - 546)
 // index of last upper sideband subcarrier
-#define UB_END ((FFT / 2) + 546)
+#define UB_END ((FFT_FM / 2) + 546)
 // bits per P1 frame
 #define P1_FRAME_LEN 146176
 // bits per encoded P1 frame

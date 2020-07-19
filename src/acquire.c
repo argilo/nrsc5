@@ -22,7 +22,7 @@
 
 #define FILTER_DELAY 15
 
-static float filter_taps[] = {
+static float filter_taps_fm[] = {
     -0.000685643230099231,
     0.005636964458972216,
     0.009015781804919243,
@@ -57,19 +57,55 @@ static float filter_taps[] = {
     0
 };
 
+static float filter_taps_am[] = {
+    -0.00038464731187559664,
+    -0.00021618751634377986,
+    0.0026779419276863337,
+    -0.00029802651260979474,
+    -0.0012626448879018426,
+    -0.0013182522961869836,
+    -0.012252614833414555,
+    0.015980124473571777,
+    0.037112727761268616,
+    -0.05451361835002899,
+    -0.05804193392395973,
+    0.11320608854293823,
+    0.055298302322626114,
+    -0.16878043115139008,
+    -0.022917453199625015,
+    0.19178225100040436,
+    -0.022917453199625015,
+    -0.16878043115139008,
+    0.055298302322626114,
+    0.11320608854293823,
+    -0.05804193392395973,
+    -0.05451361835002899,
+    0.037112727761268616,
+    0.015980124473571777,
+    -0.012252614833414555,
+    -0.0013182522961869836,
+    -0.0012626448879018426,
+    -0.00029802651260979474,
+    0.0026779419276863337,
+    -0.00021618751634377986,
+    -0.00038464731187559664,
+    0
+};
+
 void acquire_process(acquire_t *st)
 {
     float complex max_v = 0, phase_increment;
     float angle, angle_diff, angle_factor, max_mag = -1.0f;
     int samperr = 0;
     unsigned int i, j, keep;
+    float complex foo, bar, lastbar, angle_error;
 
-    if (st->idx != FFTCP * (ACQUIRE_SYMBOLS + 1))
+    if (st->idx != st->fftcp * (ACQUIRE_SYMBOLS + 1))
         return;
 
     if (st->input->sync_state == SYNC_STATE_FINE)
     {
-        samperr = FFTCP / 2 + st->input->sync.samperr;
+        samperr = st->fftcp / 2 + st->input->sync.samperr;
         st->input->sync.samperr = 0;
 
         angle_diff = -st->input->sync.angle;
@@ -80,33 +116,33 @@ void acquire_process(acquire_t *st)
     else
     {
         cint16_t y;
-        for (i = 0; i < FFTCP * (ACQUIRE_SYMBOLS + 1); i++)
+        for (i = 0; i < st->fftcp * (ACQUIRE_SYMBOLS + 1); i++)
         {
             fir_q15_execute(st->filter, &st->in_buffer[i], &y);
             st->buffer[i] = cq15_to_cf_conj(y);
         }
 
-        memset(st->sums, 0, sizeof(float complex) * FFTCP);
-        for (i = 0; i < FFTCP; ++i)
+        memset(st->sums, 0, sizeof(float complex) * st->fftcp);
+        for (i = 0; i < st->fftcp; ++i)
         {
             for (j = 0; j < ACQUIRE_SYMBOLS; ++j)
-                st->sums[i] += st->buffer[i + j * FFTCP] * conjf(st->buffer[i + j * FFTCP + FFT]);
+                st->sums[i] += st->buffer[i + j * st->fftcp] * conjf(st->buffer[i + j * st->fftcp + st->fft]);
         }
 
-        for (i = 0; i < FFTCP; ++i)
+        for (i = 0; i < st->fftcp; ++i)
         {
             float mag;
             float complex v = 0;
 
-            for (j = 0; j < CP; ++j)
-                v += st->sums[(i + j) % FFTCP] * st->shape[j] * st->shape[j + FFT];
+            for (j = 0; j < st->cp; ++j)
+                v += st->sums[(i + j) % st->fftcp] * st->shape[j] * st->shape[j + st->fft];
 
             mag = normf(v);
             if (mag > max_mag)
             {
                 max_mag = mag;
                 max_v = v;
-                samperr = (i + FFTCP - FILTER_DELAY) % FFTCP;
+                samperr = (i + st->fftcp - FILTER_DELAY) % st->fftcp;
             }
         }
 
@@ -117,38 +153,67 @@ void acquire_process(acquire_t *st)
         input_set_sync_state(st->input, SYNC_STATE_COARSE);
     }
 
-    for (i = 0; i < FFTCP * (ACQUIRE_SYMBOLS + 1); i++)
+    for (i = 0; i < st->fftcp * (ACQUIRE_SYMBOLS + 1); i++)
         st->buffer[i] = cq15_to_cf_conj(st->in_buffer[i]);
 
-    sync_adjust(&st->input->sync, FFTCP / 2 - samperr);
+    sync_adjust(&st->input->sync, st->fftcp / 2 - samperr);
     angle -= 2 * M_PI * st->cfo;
 
-    st->phase *= cexpf(-(FFTCP / 2 - samperr) * angle / FFT * I);
+    st->phase *= cexpf(-(st->fftcp / 2 - samperr) * angle / st->fft * I);
 
-    phase_increment = cexpf(angle / FFT * I);
+    phase_increment = cexpf(angle / st->fft * I);
+
+    float complex temp_phase = st->phase;
+    foo = 0;
+    angle_error = 0;
     for (i = 0; i < ACQUIRE_SYMBOLS; ++i)
     {
         int j;
-        for (j = 0; j < FFTCP; ++j)
+        bar = 0;
+        for (j = 0; j < st->fftcp; ++j)
         {
-            float complex sample = st->phase * st->buffer[i * FFTCP + j + samperr];
-            if (j < CP)
-                st->fftin[j] = st->shape[j] * sample;
-            else if (j < FFT)
-                st->fftin[j] = sample;
+            float complex sample = temp_phase * st->buffer[i * st->fftcp + j + samperr];
+            foo += sample;
+            bar += sample;
+            temp_phase *= phase_increment;
+        }
+        if (i > 0) {
+            angle_error += (bar / lastbar);
+        }
+        temp_phase /= cabsf(temp_phase);
+        lastbar = bar;
+    }
+    phase_increment *= cexpf((-cargf(angle_error) / st->fftcp) * I);
+    st->phase *= cexpf(-(cargf(foo) - cargf(angle_error) * ACQUIRE_SYMBOLS / 2)*I);
+
+
+    for (i = 0; i < ACQUIRE_SYMBOLS; ++i)
+    {
+        int j;
+        for (j = 0; j < st->fftcp; ++j)
+        {
+            float complex sample = st->phase * st->buffer[i * st->fftcp + j + samperr];
+            if (j < st->cp)
+                st->fftin[(j + 256 - 7) % st->fft] = st->shape[j] * sample; // TODO: remove -7 for FM
+            else if (j < st->fft)
+                st->fftin[(j + 256 - 7) % st->fft] = sample;
             else
-                st->fftin[j - FFT] += st->shape[j] * sample;
+                st->fftin[(j + 256 - 7) % st->fft] += st->shape[j] * sample;
 
             st->phase *= phase_increment;
         }
         st->phase /= cabsf(st->phase);
 
-        fftwf_execute(st->fft);
-        fftshift(st->fftout, FFT);
+        fftwf_execute(st->fft_plan);
+        fftshift(st->fftout, st->fft);
+        complex float ref = st->fftout[128+1] - conjf(st->fftout[128-1]);
+        int thisbit = (cargf(ref) > 0) ? 1 : 0;
+        printf("%d", thisbit);
         sync_push(&st->input->sync, st->fftout);
     }
+    printf("\n");
 
-    keep = FFTCP + (FFTCP / 2 - samperr);
+    keep = st->fftcp + (st->fftcp / 2 - samperr);
     memmove(&st->in_buffer[0], &st->in_buffer[st->idx - keep], sizeof(cint16_t) * keep);
     st->idx = keep;
 }
@@ -161,14 +226,14 @@ void acquire_cfo_adjust(acquire_t *st, int cfo)
         return;
 
     st->cfo += cfo;
-    hz = (float) st->cfo * SAMPLE_RATE / 2 / FFT;
+    hz = (float) st->cfo * SAMPLE_RATE / 2 / st->fft; // TODO: does this need to accomodate AM?
 
     log_info("CFO: %f Hz", hz);
 }
 
 unsigned int acquire_push(acquire_t *st, cint16_t *buf, unsigned int length)
 {
-    unsigned int needed = FFTCP - st->idx % FFTCP;
+    unsigned int needed = st->fftcp - st->idx % st->fftcp;
 
     if (length < needed)
         return 0;
@@ -188,23 +253,32 @@ void acquire_reset(acquire_t *st)
     st->cfo = 0;
 }
 
-void acquire_init(acquire_t *st, input_t *input)
+void acquire_init(acquire_t *st, input_t *input, int mode)
 {
     int i;
 
-    st->input = input;
-    st->filter = firdecim_q15_create(filter_taps, sizeof(filter_taps) / sizeof(filter_taps[0]));
-    st->fft = fftwf_plan_dft_1d(FFT, st->fftin, st->fftout, FFTW_FORWARD, 0);
+    st->fft = (mode == NRSC5_MODE_FM ? FFT_FM : FFT_AM);
+    st->fftcp = (mode == NRSC5_MODE_FM ? FFTCP_FM : FFTCP_AM);
+    st->cp = (mode == NRSC5_MODE_FM ? CP_FM : CP_AM);
 
-    for (i = 0; i < FFTCP; ++i)
+    st->input = input;
+
+    if (mode == NRSC5_MODE_FM)
+        st->filter = firdecim_q15_create(filter_taps_fm, sizeof(filter_taps_fm) / sizeof(filter_taps_fm[0]));
+    else
+        st->filter = firdecim_q15_create(filter_taps_am, sizeof(filter_taps_am) / sizeof(filter_taps_am[0]));
+
+    st->fft_plan = fftwf_plan_dft_1d(st->fft, st->fftin, st->fftout, FFTW_FORWARD, 0);
+
+    for (i = 0; i < st->fftcp; ++i)
     {
         // Pulse shaping window function
-        if (i < CP)
-            st->shape[i] = sinf(M_PI / 2 * i / CP);
-        else if (i < FFT)
+        if (i < st->cp)
+            st->shape[i] = sinf(M_PI / 2 * i / st->cp);
+        else if (i < st->fft)
             st->shape[i] = 1;
         else
-            st->shape[i] = cosf(M_PI / 2 * (i - FFT) / CP);
+            st->shape[i] = cosf(M_PI / 2 * (i - st->fft) / st->cp);
     }
 
     acquire_reset(st);
@@ -213,5 +287,5 @@ void acquire_init(acquire_t *st, input_t *input)
 void acquire_free(acquire_t *st)
 {
     firdecim_q15_free(st->filter);
-    fftwf_destroy_plan(st->fft);
+    fftwf_destroy_plan(st->fft_plan);
 }
