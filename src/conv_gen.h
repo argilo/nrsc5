@@ -109,3 +109,13 @@ static void gen_metrics_k7_n3(const int8_t *seq, const int16_t *out,
 	_gen_path_metrics(64, sums, metrics, paths, norm);
 
 }
+
+static void gen_metrics_k9_n3(const int8_t *seq, const int16_t *out,
+		       int16_t *sums, int16_t *paths, int norm)
+{
+	int16_t metrics[128];
+
+	_gen_branch_metrics_n3(256, seq, out, metrics);
+	_gen_path_metrics(256, sums, metrics, paths, norm);
+
+}

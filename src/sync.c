@@ -29,6 +29,48 @@
 #define PARTITION_WIDTH 19
 #define MIDDLE_REF_SC 30 // midpoint of Table 11-3 in 1011s.pdf
 
+static uint8_t gray4(float f)
+{
+    if (f < -1)
+        return 0;
+    else if (f < 0)
+        return 2;
+    else if (f < 1)
+        return 3;
+    else
+        return 1;
+}
+
+static uint8_t gray8(float f)
+{
+    if (f < -3)
+        return 0;
+    else if (f < -2)
+        return 4;
+    else if (f < -1)
+        return 6;
+    else if (f < 0)
+        return 2;
+    else if (f < 1)
+        return 3;
+    else if (f < 2)
+        return 7;
+    else if (f < 3)
+        return 5;
+    else
+        return 1;
+}
+
+static uint8_t qam16(complex float cf)
+{
+    return gray4(crealf(cf)) | (gray4(cimagf(cf)) << 2);
+}
+
+static uint8_t qam64(complex float cf)
+{
+    return gray8(crealf(cf)) | (gray8(cimagf(cf)) << 3);
+}
+
 static void adjust_ref(sync_t *st, unsigned int ref, int cfo)
 {
     unsigned int n;
@@ -135,6 +177,32 @@ static int find_ref(sync_t *st, unsigned int ref, unsigned int rsid)
     return fuzzy_match(needle, sizeof(needle), data, BLKSZ);
 }
 
+static int find_first_block_am(sync_t *st, unsigned int ref)
+{
+    signed char needle[] = {
+        0, 1, 1, 0, 0, 1, 0, -1, -1, 1, -1, -1, -1, -1, 0, -1, -1, 0, 0, 0, -1, 1, 1
+    };
+    unsigned char data[BLKSZ];
+
+    for (int n = 0; n < BLKSZ; n++)
+        data[n] = cimagf(st->buffer[ref][n]) <= 0 ? 0 : 1;
+
+    return fuzzy_match(needle, sizeof(needle), data, BLKSZ);
+}
+
+static int find_ref_am(sync_t *st, unsigned int ref)
+{
+    signed char needle[] = {
+        0, 1, 1, 0, 0, 1, 0, -1, -1, 1, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1, -1, 1, 1
+    };
+    unsigned char data[BLKSZ];
+
+    for (int n = 0; n < BLKSZ; n++)
+        data[n] = cimagf(st->buffer[ref][n]) <= 0 ? 0 : 1;
+
+    return fuzzy_match(needle, sizeof(needle), data, BLKSZ);
+}
+
 static float calc_smag(sync_t *st, unsigned int ref)
 {
     float sum = 0;
@@ -224,185 +292,244 @@ void detect_cfo(sync_t *st)
 
 void sync_process(sync_t *st)
 {
-    int i, partitions_per_band;
-
-    switch (st->psmi) {
-        case 2:
-            partitions_per_band = 11;
-            break;
-        case 3:
-            partitions_per_band = 12;
-            break;
-        case 5:
-        case 6:
-        case 11:
-            partitions_per_band = 14;
-            break;
-        default:
-            partitions_per_band = 10;
-    }
-
-    for (i = 0; i < partitions_per_band * PARTITION_WIDTH + 1; i += PARTITION_WIDTH)
+    if (st->input->radio->mode == NRSC5_MODE_FM)
     {
-        adjust_ref(st, LB_START + i, 0);
-        adjust_ref(st, UB_END - i, 0);
-    }
+        int i, partitions_per_band;
 
-    // check if we now have synchronization
-    if (st->input->sync_state == SYNC_STATE_COARSE)
-    {
-        unsigned int good_refs = 0;
-        for (i = 0; i <= partitions_per_band; i++)
-        {
-            if (find_first_block(st, LB_START + i * PARTITION_WIDTH, (MIDDLE_REF_SC-i) & 0x3) == 0)
-                good_refs++;
-            if (find_first_block(st, UB_END - i * PARTITION_WIDTH, (MIDDLE_REF_SC-i) & 0x3) == 0)
-                good_refs++;
+        switch (st->psmi) {
+            case 2:
+                partitions_per_band = 11;
+                break;
+            case 3:
+                partitions_per_band = 12;
+                break;
+            case 5:
+            case 6:
+            case 11:
+                partitions_per_band = 14;
+                break;
+            default:
+                partitions_per_band = 10;
         }
-
-        if (good_refs >= 4)
-        {
-            input_set_sync_state(st->input, SYNC_STATE_FINE);
-            decode_reset(&st->input->decode);
-            frame_reset(&st->input->frame);
-        }
-        else if (st->cfo_wait == 0)
-        {
-            detect_cfo(st);
-        }
-        else
-        {
-            // Decrease wait counter.
-            st->cfo_wait--;
-        }
-    }
-
-    // if we are still synchronized
-    if (st->input->sync_state == SYNC_STATE_FINE)
-    {
-        float samperr = 0, angle = 0;
-        float sum_xy = 0, sum_x2 = 0;
-        for (i = 0; i < partitions_per_band * PARTITION_WIDTH; i += PARTITION_WIDTH)
-        {
-            adjust_data(st, LB_START + i, LB_START + i + PARTITION_WIDTH);
-            adjust_data(st, UB_END - i - PARTITION_WIDTH, UB_END - i);
-
-            samperr += phase_diff(st->phases[LB_START + i][0], st->phases[LB_START + i + PARTITION_WIDTH][0]);
-            samperr += phase_diff(st->phases[UB_END - i - PARTITION_WIDTH][0], st->phases[UB_END - i][0]);
-        }
-        samperr = samperr / (partitions_per_band * 2) * FFT_FM / PARTITION_WIDTH / (2 * M_PI);
 
         for (i = 0; i < partitions_per_band * PARTITION_WIDTH + 1; i += PARTITION_WIDTH)
         {
-            float x, y;
-
-            x = LB_START + i - (FFT_FM / 2);
-            y = st->costas_freq[LB_START + i];
-            angle += y;
-            sum_xy += x * y;
-            sum_x2 += x * x;
-
-            x = UB_END - i - (FFT_FM / 2);
-            y = st->costas_freq[UB_END - i];
-            angle += y;
-            sum_xy += x * y;
-            sum_x2 += x * x;
+            adjust_ref(st, LB_START + i, 0);
+            adjust_ref(st, UB_END - i, 0);
         }
-        samperr -= (sum_xy / sum_x2) * FFT_FM / (2 * M_PI) * ACQUIRE_SYMBOLS;
-        st->samperr = roundf(samperr);
 
-        angle /= (partitions_per_band + 1) * 2;
-        st->angle = angle;
-
-        // Calculate modulation error
-        float error_lb = 0, error_ub = 0;
-        for (int n = 0; n < BLKSZ; n++)
+        // check if we now have synchronization
+        if (st->input->sync_state == SYNC_STATE_COARSE)
         {
-            float complex c, ideal;
+            unsigned int good_refs = 0;
+            for (i = 0; i <= partitions_per_band; i++)
+            {
+                if (find_first_block(st, LB_START + i * PARTITION_WIDTH, (MIDDLE_REF_SC-i) & 0x3) == 0)
+                    good_refs++;
+                if (find_first_block(st, UB_END - i * PARTITION_WIDTH, (MIDDLE_REF_SC-i) & 0x3) == 0)
+                    good_refs++;
+            }
+
+            if (good_refs >= 4)
+            {
+                input_set_sync_state(st->input, SYNC_STATE_FINE);
+                decode_reset(&st->input->decode);
+                frame_reset(&st->input->frame);
+            }
+            else if (st->cfo_wait == 0)
+            {
+                detect_cfo(st);
+            }
+            else
+            {
+                // Decrease wait counter.
+                st->cfo_wait--;
+            }
+        }
+
+        // if we are still synchronized
+        if (st->input->sync_state == SYNC_STATE_FINE)
+        {
+            float samperr = 0, angle = 0;
+            float sum_xy = 0, sum_x2 = 0;
             for (i = 0; i < partitions_per_band * PARTITION_WIDTH; i += PARTITION_WIDTH)
             {
-                unsigned int j;
-                for (j = 1; j < PARTITION_WIDTH; j++)
-                {
-                    c = st->buffer[LB_START + i + j][n];
-                    ideal = CMPLXF(crealf(c) >= 0 ? 1 : -1, cimagf(c) >= 0 ? 1 : -1);
-                    error_lb += normf(ideal - c);
+                adjust_data(st, LB_START + i, LB_START + i + PARTITION_WIDTH);
+                adjust_data(st, UB_END - i - PARTITION_WIDTH, UB_END - i);
 
-                    c = st->buffer[UB_END - i - PARTITION_WIDTH + j][n];
-                    ideal = CMPLXF(crealf(c) >= 0 ? 1 : -1, cimagf(c) >= 0 ? 1 : -1);
-                    error_ub += normf(ideal - c);
-                }
+                samperr += phase_diff(st->phases[LB_START + i][0], st->phases[LB_START + i + PARTITION_WIDTH][0]);
+                samperr += phase_diff(st->phases[UB_END - i - PARTITION_WIDTH][0], st->phases[UB_END - i][0]);
             }
-        }
+            samperr = samperr / (partitions_per_band * 2) * FFT_FM / PARTITION_WIDTH / (2 * M_PI);
 
-        st->error_lb += error_lb;
-        st->error_ub += error_ub;
-
-        // Display average MER for each sideband
-        if (++st->mer_cnt == 16)
-        {
-            float signal = 2 * BLKSZ * (partitions_per_band * PARTITION_DATA_CARRIERS) * st->mer_cnt;
-            float mer_db_lb = 10 * log10f(signal / st->error_lb);
-            float mer_db_ub = 10 * log10f(signal / st->error_ub);
-
-            nrsc5_report_mer(st->input->radio, mer_db_lb, mer_db_ub);
-
-            st->mer_cnt = 0;
-            st->error_lb = 0;
-            st->error_ub = 0;
-        }
-
-        // Soft demod based on MER for each sideband
-        float mer_lb = 2 * BLKSZ * (partitions_per_band * PARTITION_DATA_CARRIERS) / error_lb;
-        float mer_ub = 2 * BLKSZ * (partitions_per_band * PARTITION_DATA_CARRIERS) / error_ub;
-        float mult_lb = fmaxf(fminf(mer_lb * 10, 127), 1);
-        float mult_ub = fmaxf(fminf(mer_ub * 10, 127), 1);
-
-#define DEMOD(x) ((x) >= 0 ? 1 : -1)
-        for (int n = 0; n < BLKSZ; n++)
-        {
-            float complex c;
-            for (i = LB_START; i < LB_START + (PM_PARTITIONS * PARTITION_WIDTH); i += PARTITION_WIDTH)
+            for (i = 0; i < partitions_per_band * PARTITION_WIDTH + 1; i += PARTITION_WIDTH)
             {
-                unsigned int j;
-                for (j = 1; j < PARTITION_WIDTH; j++)
-                {
-                    c = st->buffer[i + j][n];
-                    decode_push_pm(&st->input->decode, DEMOD(crealf(c)) * mult_lb);
-                    decode_push_pm(&st->input->decode, DEMOD(cimagf(c)) * mult_lb);
-                }
+                float x, y;
+
+                x = LB_START + i - (FFT_FM / 2);
+                y = st->costas_freq[LB_START + i];
+                angle += y;
+                sum_xy += x * y;
+                sum_x2 += x * x;
+
+                x = UB_END - i - (FFT_FM / 2);
+                y = st->costas_freq[UB_END - i];
+                angle += y;
+                sum_xy += x * y;
+                sum_x2 += x * x;
             }
-            for (i = UB_END - (PM_PARTITIONS * PARTITION_WIDTH); i < UB_END; i += PARTITION_WIDTH)
+            samperr -= (sum_xy / sum_x2) * FFT_FM / (2 * M_PI) * ACQUIRE_SYMBOLS;
+            st->samperr = roundf(samperr);
+
+            angle /= (partitions_per_band + 1) * 2;
+            st->angle = angle;
+
+            // Calculate modulation error
+            float error_lb = 0, error_ub = 0;
+            for (int n = 0; n < BLKSZ; n++)
             {
-                unsigned int j;
-                for (j = 1; j < PARTITION_WIDTH; j++)
+                float complex c, ideal;
+                for (i = 0; i < partitions_per_band * PARTITION_WIDTH; i += PARTITION_WIDTH)
                 {
-                    c = st->buffer[i + j][n];
-                    decode_push_pm(&st->input->decode, DEMOD(crealf(c)) * mult_ub);
-                    decode_push_pm(&st->input->decode, DEMOD(cimagf(c)) * mult_ub);
+                    unsigned int j;
+                    for (j = 1; j < PARTITION_WIDTH; j++)
+                    {
+                        c = st->buffer[LB_START + i + j][n];
+                        ideal = CMPLXF(crealf(c) >= 0 ? 1 : -1, cimagf(c) >= 0 ? 1 : -1);
+                        error_lb += normf(ideal - c);
+
+                        c = st->buffer[UB_END - i - PARTITION_WIDTH + j][n];
+                        ideal = CMPLXF(crealf(c) >= 0 ? 1 : -1, cimagf(c) >= 0 ? 1 : -1);
+                        error_ub += normf(ideal - c);
+                    }
                 }
             }
-            if (st->psmi == 3) {
-                for (i = LB_START + (PM_PARTITIONS * PARTITION_WIDTH); i < LB_START + (PM_PARTITIONS + 2) * PARTITION_WIDTH; i += PARTITION_WIDTH)
+
+            st->error_lb += error_lb;
+            st->error_ub += error_ub;
+
+            // Display average MER for each sideband
+            if (++st->mer_cnt == 16)
+            {
+                float signal = 2 * BLKSZ * (partitions_per_band * PARTITION_DATA_CARRIERS) * st->mer_cnt;
+                float mer_db_lb = 10 * log10f(signal / st->error_lb);
+                float mer_db_ub = 10 * log10f(signal / st->error_ub);
+
+                nrsc5_report_mer(st->input->radio, mer_db_lb, mer_db_ub);
+
+                st->mer_cnt = 0;
+                st->error_lb = 0;
+                st->error_ub = 0;
+            }
+
+            // Soft demod based on MER for each sideband
+            float mer_lb = 2 * BLKSZ * (partitions_per_band * PARTITION_DATA_CARRIERS) / error_lb;
+            float mer_ub = 2 * BLKSZ * (partitions_per_band * PARTITION_DATA_CARRIERS) / error_ub;
+            float mult_lb = fmaxf(fminf(mer_lb * 10, 127), 1);
+            float mult_ub = fmaxf(fminf(mer_ub * 10, 127), 1);
+
+    #define DEMOD(x) ((x) >= 0 ? 1 : -1)
+            for (int n = 0; n < BLKSZ; n++)
+            {
+                float complex c;
+                for (i = LB_START; i < LB_START + (PM_PARTITIONS * PARTITION_WIDTH); i += PARTITION_WIDTH)
                 {
                     unsigned int j;
                     for (j = 1; j < PARTITION_WIDTH; j++)
                     {
                         c = st->buffer[i + j][n];
-                        decode_push_px1(&st->input->decode, DEMOD(crealf(c)) * mult_lb);
-                        decode_push_px1(&st->input->decode, DEMOD(cimagf(c)) * mult_lb);
+                        decode_push_pm(&st->input->decode, DEMOD(crealf(c)) * mult_lb);
+                        decode_push_pm(&st->input->decode, DEMOD(cimagf(c)) * mult_lb);
                     }
                 }
-                for (i = UB_END - (PM_PARTITIONS + 2) * PARTITION_WIDTH; i < UB_END - (PM_PARTITIONS * PARTITION_WIDTH); i += PARTITION_WIDTH)
+                for (i = UB_END - (PM_PARTITIONS * PARTITION_WIDTH); i < UB_END; i += PARTITION_WIDTH)
                 {
                     unsigned int j;
                     for (j = 1; j < PARTITION_WIDTH; j++)
                     {
                         c = st->buffer[i + j][n];
-                        decode_push_px1(&st->input->decode, DEMOD(crealf(c)) * mult_ub);
-                        decode_push_px1(&st->input->decode, DEMOD(cimagf(c)) * mult_ub);
+                        decode_push_pm(&st->input->decode, DEMOD(crealf(c)) * mult_ub);
+                        decode_push_pm(&st->input->decode, DEMOD(cimagf(c)) * mult_ub);
                     }
                 }
+                if (st->psmi == 3) {
+                    for (i = LB_START + (PM_PARTITIONS * PARTITION_WIDTH); i < LB_START + (PM_PARTITIONS + 2) * PARTITION_WIDTH; i += PARTITION_WIDTH)
+                    {
+                        unsigned int j;
+                        for (j = 1; j < PARTITION_WIDTH; j++)
+                        {
+                            c = st->buffer[i + j][n];
+                            decode_push_px1(&st->input->decode, DEMOD(crealf(c)) * mult_lb);
+                            decode_push_px1(&st->input->decode, DEMOD(cimagf(c)) * mult_lb);
+                        }
+                    }
+                    for (i = UB_END - (PM_PARTITIONS + 2) * PARTITION_WIDTH; i < UB_END - (PM_PARTITIONS * PARTITION_WIDTH); i += PARTITION_WIDTH)
+                    {
+                        unsigned int j;
+                        for (j = 1; j < PARTITION_WIDTH; j++)
+                        {
+                            c = st->buffer[i + j][n];
+                            decode_push_px1(&st->input->decode, DEMOD(crealf(c)) * mult_ub);
+                            decode_push_px1(&st->input->decode, DEMOD(cimagf(c)) * mult_ub);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else {
+        int offset;
+        static int synced = 0;
+
+        for (int i = 1; i <= 53; i++)
+        {
+            for (int n = 0; n < BLKSZ; n++)
+            {
+                st->buffer[128+i][n] -= conjf(st->buffer[128-i][n]);
+            }
+        }
+
+        if (synced == 0 && st->cfo_wait == 0)
+        {
+            offset = find_ref_am(st, 128+1);
+            if (offset > 0)
+            {
+                input_set_skip(st->input, offset * FFTCP_AM);
+                log_debug("Block @ %d", offset);
+                st->cfo_wait = 8;
+            }
+        }
+        else
+        {
+            st->cfo_wait--;
+        }
+
+        if (synced == 0)
+        {
+            offset = find_first_block_am(st, 128+1);
+            if (offset == 0)
+            {
+                log_debug("Sync!");
+                synced = 1;
+                decode_reset(&st->input->decode);
+                frame_reset(&st->input->frame);
+            }
+        }
+
+        if (synced == 1)
+        {
+            float complex pids1_mult = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+27][8] + st->buffer[128+27][24]);
+            for (int n = 0; n < BLKSZ; n++)
+            {
+                st->buffer[128+27][n] *= pids1_mult;
+                decode_push_pids(&st->input->decode, qam16(st->buffer[128+27][n]));
+            }
+
+            float complex pids2_mult = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+53][8] + st->buffer[128+53][24]);
+            for (int n = 0; n < BLKSZ; n++)
+            {
+                st->buffer[128+53][n] *= pids2_mult;
+                decode_push_pids(&st->input->decode, qam16(st->buffer[128+53][n]));
             }
         }
     }
@@ -421,10 +548,21 @@ void sync_adjust(sync_t *st, int sample_adj)
 void sync_push(sync_t *st, float complex *fftout)
 {
     unsigned int i;
-    for (i = 0; i < MAX_PARTITIONS * PARTITION_WIDTH + 1; i++)
+
+    if (st->input->radio->mode == NRSC5_MODE_FM)
     {
-        st->buffer[LB_START + i][st->idx] = fftout[LB_START + i];
-        st->buffer[UB_END - i][st->idx] = fftout[UB_END - i];
+        for (i = 0; i < MAX_PARTITIONS * PARTITION_WIDTH + 1; i++)
+        {
+            st->buffer[LB_START + i][st->idx] = fftout[LB_START + i];
+            st->buffer[UB_END - i][st->idx] = fftout[UB_END - i];
+        }
+    }
+    else
+    {
+        for (i = 128-81; i < 128+81; i++)
+        {
+            st->buffer[i][st->idx] = fftout[i];
+        }
     }
 
     if (++st->idx == BLKSZ)

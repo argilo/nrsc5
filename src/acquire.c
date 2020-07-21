@@ -119,7 +119,7 @@ void acquire_process(acquire_t *st)
         for (i = 0; i < st->fftcp * (ACQUIRE_SYMBOLS + 1); i++)
         {
             fir_q15_execute(st->filter, &st->in_buffer[i], &y);
-            st->buffer[i] = cq15_to_cf_conj(y);
+            st->buffer[i] = conjf(cq15_to_cf_conj(y)); // TODO: conjf for AM only
         }
 
         memset(st->sums, 0, sizeof(float complex) * st->fftcp);
@@ -194,11 +194,11 @@ void acquire_process(acquire_t *st)
         {
             float complex sample = st->phase * st->buffer[i * st->fftcp + j + samperr];
             if (j < st->cp)
-                st->fftin[(j + 256 - 7) % st->fft] = st->shape[j] * sample; // TODO: remove -7 for FM
+                st->fftin[(j + 128 - 7) % st->fft] = st->shape[j] * sample; // TODO: remove -7 for FM
             else if (j < st->fft)
-                st->fftin[(j + 256 - 7) % st->fft] = sample;
+                st->fftin[(j + 128 - 7) % st->fft] = sample;
             else
-                st->fftin[(j + 256 - 7) % st->fft] += st->shape[j] * sample;
+                st->fftin[(j + 128 - 7) % st->fft] += st->shape[j] * sample;
 
             st->phase *= phase_increment;
         }
@@ -206,12 +206,12 @@ void acquire_process(acquire_t *st)
 
         fftwf_execute(st->fft_plan);
         fftshift(st->fftout, st->fft);
-        complex float ref = st->fftout[128+1] - conjf(st->fftout[128-1]);
-        int thisbit = (cargf(ref) > 0) ? 1 : 0;
-        printf("%d", thisbit);
+        //complex float ref = st->fftout[128+1] - conjf(st->fftout[128-1]);
+        //int thisbit = (cargf(ref) > 0) ? 1 : 0;
+        //printf("%d", thisbit);
         sync_push(&st->input->sync, st->fftout);
     }
-    printf("\n");
+    //printf("\n");
 
     keep = st->fftcp + (st->fftcp / 2 - samperr);
     memmove(&st->in_buffer[0], &st->in_buffer[st->idx - keep], sizeof(cint16_t) * keep);

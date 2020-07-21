@@ -122,6 +122,8 @@ static unsigned vstate_lshift(unsigned reg, int k, int val)
 		mask = 0x0e;
 	else if (k == 7)
 		mask = 0x3e;
+	else if (k == 9)
+		mask = 0xfe;
 	else
 		mask = 0;
 
@@ -177,8 +179,10 @@ static void gen_rec_state_info(const struct lte_conv_code *code,
 
 	if (code->k == 5)
 		mask = 0x0f;
-	else
+	else if (code->k == 7)
 		mask = 0x3f;
+	else
+	  mask = 0xff;
 
 	/* Check for recursive outputs */
 	for (i = 0; i < code->n; i++) {
@@ -201,7 +205,7 @@ static void free_trellis(struct vtrellis *trellis)
 	free(trellis);
 }
 
-#define NUM_STATES(K)	(K == 7 ? 64 : 16)
+#define NUM_STATES(K)	(K == 9 ? 256 : (K == 7 ? 64 : 16))
 
 /*
  * Allocate and initialize the trellis object
@@ -367,7 +371,7 @@ static struct vdecoder *alloc_vdec(const struct lte_conv_code *code)
 	dec->intrvl = INT16_MAX / (dec->n * INT8_MAX) - dec->k;
 
     assert(dec->n == 3);
-    assert(dec->k == 7);
+    assert(dec->k == 7 || dec->k == 9);
 
 	if (code->term == CONV_TERM_FLUSH)
 		dec->len = code->len + code->k - 1;
@@ -408,11 +412,18 @@ static void _conv_decode(struct vdecoder *dec, const int8_t *seq, int term, int 
 		if (term == CONV_TERM_TAIL_BITING && j == len)
 			j = 0;
 
-		gen_metrics_k7_n3(&seq[dec->n * j],
-				 trellis->outputs,
-				 trellis->sums,
-				 dec->paths[i],
-				 !(i % dec->intrvl));
+		if (dec->k == 7)
+			gen_metrics_k7_n3(&seq[dec->n * j],
+					 trellis->outputs,
+					 trellis->sums,
+					 dec->paths[i],
+					 !(i % dec->intrvl));
+		else if (dec->k == 9)
+			gen_metrics_k9_n3(&seq[dec->n * j],
+					 trellis->outputs,
+					 trellis->sums,
+					 dec->paths[i],
+					 !(i % dec->intrvl));
 	}
 }
 
@@ -455,4 +466,30 @@ int nrsc5_conv_decode_pids(const int8_t *in, uint8_t *out)
 int nrsc5_conv_decode_p3(const int8_t *in, uint8_t *out)
 {
 	return nrsc5_conv_decode(in, out, P3_FRAME_LEN);
+}
+
+int nrsc5_conv_decode_pids_am(const int8_t *in, uint8_t *out)
+{
+	const struct lte_conv_code code = {
+		.n = 3,
+		.k = 9,
+		.len = PIDS_FRAME_LEN,
+		.gen = { 0561, 0753, 0711 },
+		.term = CONV_TERM_TAIL_BITING,
+	};
+	int rc;
+
+	struct vdecoder *vdec = alloc_vdec(&code);
+	if (!vdec)
+		return -EFAULT;
+
+	reset_decoder(vdec, code.term);
+
+	/* Propagate through the trellis with interval normalization */
+	_conv_decode(vdec, in, code.term, code.len);
+
+	rc = traceback(vdec, out, code.term, code.len);
+
+	free_vdec(vdec);
+	return rc;
 }

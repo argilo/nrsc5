@@ -21,6 +21,10 @@
 #include "pids.h"
 #include "private.h"
 
+/* 1012s.pdf figure 10-5 */
+static int pids_il_delay[] = { 0, 1, 12, 13, 6, 5, 18, 17, 11, 7, 23, 19 };
+static int pids_iu_delay[] = { 2, 4, 14, 16, 3, 8, 15, 20, 9, 10, 21, 22 };
+
 // calculate channel bit error rate by re-encoding and comparing to the input
 static float calc_cber(int8_t *coded, uint8_t *decoded)
 {
@@ -102,11 +106,11 @@ void decode_process_pids(decode_t *st)
         11, 3, 19, 7, 15, 9, 17, 1, 13, 5
     };
     unsigned int i, out = 0;
-    for (i = 0; i < PIDS_FRAME_LEN_ENCODED; i++)
+    for (i = 0; i < PIDS_FRAME_LEN_ENCODED_FM; i++)
     {
         int partition = v[i % J];
         int block = decode_get_block(st) - 1;
-        int k = ((i / J) % (PIDS_FRAME_LEN_ENCODED / J)) + (P1_FRAME_LEN_ENCODED / (J * B));
+        int k = ((i / J) % (PIDS_FRAME_LEN_ENCODED_FM / J)) + (P1_FRAME_LEN_ENCODED / (J * B));
         int row = (k * 11) % 32;
         int column = (k * 11 + k / (32*9)) % C;
         st->viterbi_pids[out++] = st->buffer_pm[(block * 32 + row) * 720 + partition * C + column];
@@ -150,6 +154,42 @@ void decode_process_p3(decode_t *st)
         st->i_p3 = 0;
         st->ready_p3 = 1;
     }
+}
+
+void decode_process_pids_am(decode_t *st)
+{
+    uint8_t il[120], iu[120];
+
+    /* 1012s.pdf section 10.4 */
+    for (int n = 0; n < 120; n++) {
+        int k, p, row;
+
+        p = n % 4;
+
+        k = (n + (n/60) + 11) % 30;
+        row = (11 * (k + (k/15)) + 3) % 32;
+        // matrix[0][offset + row] |= (il[n] << p);
+        il[n] = (st->buffer_pids_am[row] >> p) & 1;
+
+        k = (n + (n/60)) % 30;
+        row = (11 * (k + (k/15)) + 3) % 32;
+        // matrix[1][offset + row] |= (iu[n] << p);
+        iu[n] = (st->buffer_pids_am[BLKSZ + row] >> p) & 1;
+    }
+
+    /* 1012s.pdf figure 10-5 */
+    for (int i = 0; i < 10; i++) {
+      for (int j = 0; j < 12; j++) {
+        // il[i*12 + j] = in[i*24 + pids_il_delay[j]];
+        st->viterbi_pids[i*24 + pids_il_delay[j]] = il[i*12 + j] ? 1 : -1;
+        // iu[i*12 + j] = in[i*24 + pids_iu_delay[j]];
+        st->viterbi_pids[i*24 + pids_iu_delay[j]] = iu[i*12 + j] ? 1 : -1;
+      }
+    }
+
+    nrsc5_conv_decode_pids_am(st->viterbi_pids, st->scrambler_pids);
+    descramble(st->scrambler_pids, PIDS_FRAME_LEN);
+    pids_frame_push(&st->pids, st->scrambler_pids);
 }
 
 void decode_reset(decode_t *st)

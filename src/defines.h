@@ -35,7 +35,8 @@
 // bits per PIDS frame
 #define PIDS_FRAME_LEN 80
 // bits per encoded PIDS frame
-#define PIDS_FRAME_LEN_ENCODED (PIDS_FRAME_LEN * 5 / 2)
+#define PIDS_FRAME_LEN_ENCODED_FM (PIDS_FRAME_LEN * 5 / 2)
+#define PIDS_FRAME_LEN_ENCODED_AM (PIDS_FRAME_LEN * 3)
 // bits per P3 frame
 #define P3_FRAME_LEN 4608
 // bits per encoded P3 frame
