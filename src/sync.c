@@ -519,15 +519,13 @@ void sync_process(sync_t *st)
         if (synced == 1)
         {
             float complex pids1_mult = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+27][8] + st->buffer[128+27][24]);
+            float complex pids2_mult = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+53][8] + st->buffer[128+53][24]);
+
             for (int n = 0; n < BLKSZ; n++)
             {
                 st->buffer[128+27][n] *= pids1_mult;
                 decode_push_pids(&st->input->decode, qam16(st->buffer[128+27][n]));
-            }
 
-            float complex pids2_mult = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+53][8] + st->buffer[128+53][24]);
-            for (int n = 0; n < BLKSZ; n++)
-            {
                 st->buffer[128+53][n] *= pids2_mult;
                 decode_push_pids(&st->input->decode, qam16(st->buffer[128+53][n]));
             }

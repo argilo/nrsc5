@@ -169,12 +169,12 @@ void decode_process_pids_am(decode_t *st)
         k = (n + (n/60) + 11) % 30;
         row = (11 * (k + (k/15)) + 3) % 32;
         // matrix[0][offset + row] |= (il[n] << p);
-        il[n] = (st->buffer_pids_am[row] >> p) & 1;
+        il[n] = (st->buffer_pids_am[row*2] >> p) & 1;
 
         k = (n + (n/60)) % 30;
         row = (11 * (k + (k/15)) + 3) % 32;
         // matrix[1][offset + row] |= (iu[n] << p);
-        iu[n] = (st->buffer_pids_am[BLKSZ + row] >> p) & 1;
+        iu[n] = (st->buffer_pids_am[row*2 + 1] >> p) & 1;
     }
 
     /* 1012s.pdf figure 10-5 */
