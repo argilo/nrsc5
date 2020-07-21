@@ -541,6 +541,8 @@ void sync_process(sync_t *st)
 
             float complex pl_mult[25];
             float complex pu_mult[25];
+            float complex s_mult[25];
+            float complex t_mult[25];
 
             for (int col = 0; col < 25; col++)
             {
@@ -549,6 +551,8 @@ void sync_process(sync_t *st)
 
                 pl_mult[col] = 2 * CMPLXF(2.5, -2.5) / (st->buffer[128-57-col][train1] + st->buffer[128-57-col][train2]);
                 pu_mult[col] = 2 * CMPLXF(2.5, -2.5) / (st->buffer[128+57+col][train1] + st->buffer[128+57+col][train2]);
+                s_mult[col] = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+28+col][train1] + st->buffer[128+28+col][train2]);
+                t_mult[col] = 2 * CMPLXF(-0.5, 0.5) / (st->buffer[128+2+col][train1] + st->buffer[128+2+col][train2]);
             }
 
             for (int n = 0; n < BLKSZ; n++)
@@ -560,6 +564,12 @@ void sync_process(sync_t *st)
 
                     st->buffer[128+57+col][n] *= pu_mult[col];
                     // decode_push_pu(&st->input->decode, qam64(st->buffer[128+57+col][n]));
+
+                    st->buffer[128+28+col][n] *= s_mult[col];
+                    // decode_push_s(&st->input->decode, qam16(st->buffer[128+28+col][n]));
+
+                    st->buffer[128+2+col][n] *= t_mult[col];
+                    // decode_push_t(&st->input->decode, qpsk(st->buffer[128+2+col][n]));
                 }
             }
         }
