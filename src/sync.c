@@ -477,7 +477,8 @@ void sync_process(sync_t *st)
             }
         }
     }
-    else {
+    else
+    {
         int offset;
         static int synced = 0;
 
@@ -486,6 +487,14 @@ void sync_process(sync_t *st)
             for (int n = 0; n < BLKSZ; n++)
             {
                 st->buffer[128+i][n] -= conjf(st->buffer[128-i][n]);
+            }
+        }
+
+        for (int i = 57; i <= 81; i++)
+        {
+            for (int n = 0; n < BLKSZ; n++)
+            {
+                st->buffer[128-i][n] = -conjf(st->buffer[128-i][n]);
             }
         }
 
@@ -528,6 +537,30 @@ void sync_process(sync_t *st)
 
                 st->buffer[128+53][n] *= pids2_mult;
                 decode_push_pids(&st->input->decode, qam16(st->buffer[128+53][n]));
+            }
+
+            float complex pl_mult[25];
+            float complex pu_mult[25];
+
+            for (int col = 0; col < 25; col++)
+            {
+                int train1 = (5 + 11*col) % 32;
+                int train2 = (21 + 11*col) % 32;
+
+                pl_mult[col] = 2 * CMPLXF(2.5, -2.5) / (st->buffer[128-57-col][train1] + st->buffer[128-57-col][train2]);
+                pu_mult[col] = 2 * CMPLXF(2.5, -2.5) / (st->buffer[128+57+col][train1] + st->buffer[128+57+col][train2]);
+            }
+
+            for (int n = 0; n < BLKSZ; n++)
+            {
+                for (int col = 0; col < 25; col++)
+                {
+                    st->buffer[128-57-col][n] *= pl_mult[col];
+                    // decode_push_pl(&st->input->decode, qam64(st->buffer[128-57-col][n]));
+
+                    st->buffer[128+57+col][n] *= pu_mult[col];
+                    // decode_push_pu(&st->input->decode, qam64(st->buffer[128+57+col][n]));
+                }
             }
         }
     }
