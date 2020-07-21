@@ -468,6 +468,16 @@ int nrsc5_conv_decode_p3(const int8_t *in, uint8_t *out)
 	return nrsc5_conv_decode(in, out, 7, P3_FRAME_LEN, 0133, 0171, 0165);
 }
 
+int nrsc5_conv_decode_e1(const int8_t *in, uint8_t *out, int len)
+{
+  return nrsc5_conv_decode(in, out, 9, len, 0561, 0657, 0711);
+}
+
+int nrsc5_conv_decode_e2(const int8_t *in, uint8_t *out, int len)
+{
+  return nrsc5_conv_decode(in, out, 9, len, 0561, 0753, 0711);
+}
+
 int nrsc5_conv_decode_e3(const int8_t *in, uint8_t *out, int len)
 {
 	return nrsc5_conv_decode(in, out, 9, len, 0561, 0753, 0711);
