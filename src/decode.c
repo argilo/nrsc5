@@ -187,7 +187,7 @@ void decode_process_pids_am(decode_t *st)
       }
     }
 
-    nrsc5_conv_decode_pids_am(st->viterbi_pids, st->scrambler_pids);
+    nrsc5_conv_decode_e3(st->viterbi_pids, st->scrambler_pids);
     descramble(st->scrambler_pids, PIDS_FRAME_LEN);
     pids_frame_push(&st->pids, st->scrambler_pids);
 }

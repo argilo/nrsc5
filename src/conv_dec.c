@@ -468,7 +468,7 @@ int nrsc5_conv_decode_p3(const int8_t *in, uint8_t *out)
 	return nrsc5_conv_decode(in, out, 7, P3_FRAME_LEN, 0133, 0171, 0165);
 }
 
-int nrsc5_conv_decode_pids_am(const int8_t *in, uint8_t *out)
+int nrsc5_conv_decode_e3(const int8_t *in, uint8_t *out)
 {
 	return nrsc5_conv_decode(in, out, 9, PIDS_FRAME_LEN, 0561, 0753, 0711);
 }
