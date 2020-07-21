@@ -427,13 +427,13 @@ static void _conv_decode(struct vdecoder *dec, const int8_t *seq, int term, int 
 	}
 }
 
-static int nrsc5_conv_decode(const int8_t *in, uint8_t *out, int len)
+static int nrsc5_conv_decode(const int8_t *in, uint8_t *out, int k, int len, unsigned int g1, unsigned int g2, unsigned int g3)
 {
 	const struct lte_conv_code code = {
 		.n = 3,
-		.k = 7,
+		.k = k,
 		.len = len,
-		.gen = { 0133, 0171, 0165 },
+		.gen = { g1, g2, g3 },
 		.term = CONV_TERM_TAIL_BITING,
 	};
 	int rc;
@@ -455,41 +455,20 @@ static int nrsc5_conv_decode(const int8_t *in, uint8_t *out, int len)
 
 int nrsc5_conv_decode_p1(const int8_t *in, uint8_t *out)
 {
-	return nrsc5_conv_decode(in, out, P1_FRAME_LEN);
+	return nrsc5_conv_decode(in, out, 7, P1_FRAME_LEN, 0133, 0171, 0165);
 }
 
 int nrsc5_conv_decode_pids(const int8_t *in, uint8_t *out)
 {
-	return nrsc5_conv_decode(in, out, PIDS_FRAME_LEN);
+	return nrsc5_conv_decode(in, out, 7, PIDS_FRAME_LEN, 0133, 0171, 0165);
 }
 
 int nrsc5_conv_decode_p3(const int8_t *in, uint8_t *out)
 {
-	return nrsc5_conv_decode(in, out, P3_FRAME_LEN);
+	return nrsc5_conv_decode(in, out, 7, P3_FRAME_LEN, 0133, 0171, 0165);
 }
 
 int nrsc5_conv_decode_pids_am(const int8_t *in, uint8_t *out)
 {
-	const struct lte_conv_code code = {
-		.n = 3,
-		.k = 9,
-		.len = PIDS_FRAME_LEN,
-		.gen = { 0561, 0753, 0711 },
-		.term = CONV_TERM_TAIL_BITING,
-	};
-	int rc;
-
-	struct vdecoder *vdec = alloc_vdec(&code);
-	if (!vdec)
-		return -EFAULT;
-
-	reset_decoder(vdec, code.term);
-
-	/* Propagate through the trellis with interval normalization */
-	_conv_decode(vdec, in, code.term, code.len);
-
-	rc = traceback(vdec, out, code.term, code.len);
-
-	free_vdec(vdec);
-	return rc;
+	return nrsc5_conv_decode(in, out, 9, PIDS_FRAME_LEN, 0561, 0753, 0711);
 }
