@@ -61,6 +61,11 @@ static uint8_t gray8(float f)
         return 1;
 }
 
+static uint8_t qpsk(complex float cf)
+{
+    return (crealf(cf) < 0 ? 0 : 1) | (cimagf(cf) < 0 ? 0 : 2);
+}
+
 static uint8_t qam16(complex float cf)
 {
     return gray4(crealf(cf)) | (gray4(cimagf(cf)) << 2);
@@ -560,16 +565,17 @@ void sync_process(sync_t *st)
                 for (int col = 0; col < 25; col++)
                 {
                     st->buffer[128-57-col][n] *= pl_mult[col];
-                    // decode_push_pl(&st->input->decode, qam64(st->buffer[128-57-col][n]));
-
                     st->buffer[128+57+col][n] *= pu_mult[col];
-                    // decode_push_pu(&st->input->decode, qam64(st->buffer[128+57+col][n]));
-
                     st->buffer[128+28+col][n] *= s_mult[col];
-                    // decode_push_s(&st->input->decode, qam16(st->buffer[128+28+col][n]));
-
                     st->buffer[128+2+col][n] *= t_mult[col];
-                    // decode_push_t(&st->input->decode, qpsk(st->buffer[128+2+col][n]));
+
+                    decode_push_pl_pu_s_t(
+                        &st->input->decode,
+                        qam64(st->buffer[128-57-col][n]),
+                        qam64(st->buffer[128+57+col][n]),
+                        qam16(st->buffer[128+28+col][n]),
+                        qpsk(st->buffer[128+2+col][n])
+                    );
                 }
             }
         }

@@ -81,10 +81,10 @@ static inline void decode_push_pids(decode_t *st, uint8_t sym)
         st->idx_pids_am = 0;
     }
 }
-static inline void decode_push_pu_pl_s_t(decode_t *st, uint8_t sym_pu, uint8_t sym_pl, uint8_t sym_s, uint8_t sym_t)
+static inline void decode_push_pl_pu_s_t(decode_t *st, uint8_t sym_pl, uint8_t sym_pu, uint8_t sym_s, uint8_t sym_t)
 {
-    st->buffer_pu[st->idx_pu_pl_s_t] = sym_pu;
     st->buffer_pl[st->idx_pu_pl_s_t] = sym_pl;
+    st->buffer_pu[st->idx_pu_pl_s_t] = sym_pu;
     st->buffer_s[st->idx_pu_pl_s_t] = sym_s;
     st->buffer_t[st->idx_pu_pl_s_t] = sym_t;
     st->idx_pu_pl_s_t++;
