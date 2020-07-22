@@ -4,6 +4,8 @@
 #include "defines.h"
 #include "pids.h"
 
+#define DIVERSITY_DELAY (18000 * 3)
+
 typedef struct
 {
     struct input_t *input;
@@ -11,8 +13,20 @@ typedef struct
     unsigned int idx_pm;
     int8_t buffer_px1[144 * BLKSZ * 2];
     unsigned int idx_px1;
-    uint8_t buffer_pids_am[BLKSZ * 2];
+    uint8_t buffer_pids_am[2 * BLKSZ];
     unsigned int idx_pids_am;
+    uint8_t buffer_pu[25 * BLKSZ * 8];
+    uint8_t buffer_pl[25 * BLKSZ * 8];
+    uint8_t buffer_s[25 * BLKSZ * 8];
+    uint8_t buffer_t[25 * BLKSZ * 8];
+    unsigned int idx_pu_pl_s_t;
+
+    uint8_t bl[18000 + DIVERSITY_DELAY];
+    uint8_t bu[18000 + DIVERSITY_DELAY];
+    uint8_t ml[18000];
+    uint8_t mu[18000];
+    uint8_t el[12000];
+    uint8_t eu[24000];
 
     int8_t viterbi_p1[P1_FRAME_LEN * 3];
     uint8_t scrambler_p1[P1_FRAME_LEN];
@@ -61,10 +75,23 @@ static inline void decode_push_px1(decode_t *st, int8_t sbit)
 static inline void decode_push_pids(decode_t *st, uint8_t sym)
 {
     st->buffer_pids_am[st->idx_pids_am++] = sym;
-    if (st->idx_pids_am == BLKSZ * 2)
+    if (st->idx_pids_am == 2 * BLKSZ)
     {
         decode_process_pids_am(st);
         st->idx_pids_am = 0;
+    }
+}
+static inline void decode_push_pu_pl_s_t(decode_t *st, uint8_t sym_pu, uint8_t sym_pl, uint8_t sym_s, uint8_t sym_t)
+{
+    st->buffer_pu[st->idx_pu_pl_s_t] = sym_pu;
+    st->buffer_pl[st->idx_pu_pl_s_t] = sym_pl;
+    st->buffer_s[st->idx_pu_pl_s_t] = sym_s;
+    st->buffer_t[st->idx_pu_pl_s_t] = sym_t;
+    st->idx_pu_pl_s_t++;
+    if (st->idx_pu_pl_s_t == 25 * BLKSZ * 8)
+    {
+        //decode_process_p1_p3_am(st);
+        st->idx_pu_pl_s_t = 0;
     }
 }
 void decode_reset(decode_t *st);

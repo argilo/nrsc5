@@ -21,9 +21,89 @@
 #include "pids.h"
 #include "private.h"
 
+/* 1012s.pdf figure 10-4 */
+static int bl_delay[] = { 2, 1, 5 };
+static int ml_delay[] = { 11, 6, 7 };
+static int bu_delay[] = { 10, 8, 9 };
+static int mu_delay[] = { 4, 3, 0 };
+static int el_delay[] = { 0, 1 };
+static int eu_delay[] = { 2, 3, 5, 4 };
+
 /* 1012s.pdf figure 10-5 */
 static int pids_il_delay[] = { 0, 1, 12, 13, 6, 5, 18, 17, 11, 7, 23, 19 };
 static int pids_iu_delay[] = { 2, 4, 14, 16, 3, 8, 15, 20, 9, 10, 21, 22 };
+
+static void bit_map(unsigned char matrix[25 * BLKSZ * 8], int b, int k, int bits)
+{
+    int col = (9*k) % 25;
+    int row = (11*col + 16*(k/25) + 11*(k/50)) % 32;
+    matrix[25 * (b*BLKSZ + row) + col] |= bits;
+}
+
+/*
+static void interleaver_ma1(decode_t *st)
+{
+    for (int i = 0; i < 6000; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            st->bl[DIVERSITY_DELAY + i*3 + j] = p1_g[i*12 + bl_delay[j]];
+            st->ml[i*3 + j] = p1_g[i*12 + ml_delay[j]];
+            st->bu[DIVERSITY_DELAY + i*3 + j] = p1_g[i*12 + bu_delay[j]];
+            st->mu[i*3 + j] = p1_g[i*12 + mu_delay[j]];
+        }
+        for (int j = 0; j < 2; j++)
+        {
+            st->el[i*2 + j] = p3_g[i*6 + el_delay[j]];
+        }
+        for (int j = 0; j < 4; j++)
+        {
+            st->eu[i*4 + j] = p3_g[i*6 + eu_delay[j]];
+        }
+    }
+
+    int b, k, p;
+    for (int n = 0; n < 18000; n++)
+    {
+        b = n/2250;
+        k = (n + n/750 + 1) % 750;
+        p = n % 3;
+        bit_map(st->buffer_pl, b, k, st->bl[n] << p);
+
+        b = (3*n + 3) % 8;
+        k = (n + n/3000 + 3) % 750;
+        p = 3 + (n % 3);
+        bit_map(st->buffer_pl, b, k, st->ml[n] << p);
+
+        b = n/2250;
+        k = (n + n/750) % 750;
+        p = n % 3;
+        bit_map(st->buffer_pu, b, k, st->bu[n] << p);
+
+        b = (3*n) % 8;
+        k = (n + n/3000 + 2) % 750;
+        p = 3 + (n % 3);
+        bit_map(st->buffer_pu, b, k, st->mu[n] << p);
+    }
+    for (int n = 0; n < 12000; n++)
+    {
+        b = (3*n + n/3000) % 8;
+        k = (n + (n/6000)) % 750;
+        p = n % 2;
+        bit_map(st->buffer_t, b, k, st->el[n] << p);
+    }
+    for (int n = 0; n < 24000; n++)
+    {
+        b = (3*n + n/3000 + 2*(n/12000)) % 8;
+        k = (n + (n/6000)) % 750;
+        p = n % 4;
+        bit_map(st->buffer_s, b, k, st->eu[n] << p);
+    }
+
+    memmove(st->bl, st->bl + 18000, DIVERSITY_DELAY);
+    memmove(st->bu, st->bu + 18000, DIVERSITY_DELAY);
+}
+*/
 
 // calculate channel bit error rate by re-encoding and comparing to the input
 static float calc_cber(int8_t *coded, uint8_t *decoded)
