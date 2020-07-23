@@ -39,7 +39,7 @@ typedef struct
     int8_t viterbi_p3[P3_FRAME_LEN * 3];
     uint8_t scrambler_p3[P3_FRAME_LEN];
 
-    int8_t p1_am[72000];
+    uint8_t p1_am[72000];
     int8_t viterbi_p1_am[90000];
     uint8_t scrambler_p1_am[3750];
     uint8_t p3_am[36000];

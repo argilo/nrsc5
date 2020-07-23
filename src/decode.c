@@ -84,18 +84,18 @@ static void interleaver_ma1(decode_t *st)
     {
         for (int j = 0; j < 3; j++)
         {
-            st->p1_am[i*12 + bl_delay[j]] = st->bl[i*3 + j] ? 1 : -1;
-            st->p1_am[i*12 + ml_delay[j]] = st->ml[i*3 + j] ? 1 : -1;
-            st->p1_am[i*12 + bu_delay[j]] = st->bu[i*3 + j] ? 1 : -1;
-            st->p1_am[i*12 + mu_delay[j]] = st->mu[i*3 + j] ? 1 : -1;
+            st->p1_am[i*12 + bl_delay[j]] = st->bl[i*3 + j];
+            st->p1_am[i*12 + ml_delay[j]] = st->ml[i*3 + j];
+            st->p1_am[i*12 + bu_delay[j]] = st->bu[i*3 + j];
+            st->p1_am[i*12 + mu_delay[j]] = st->mu[i*3 + j];
         }
         for (int j = 0; j < 2; j++)
         {
-            st->p3_am[i*6 + el_delay[j]] = st->el[i*2 + j] ? 1 : -1;
+            st->p3_am[i*6 + el_delay[j]] = st->el[i*2 + j];
         }
         for (int j = 0; j < 4; j++)
         {
-            st->p3_am[i*6 + eu_delay[j]] = st->eu[i*4 + j] ? 1 : -1;
+            st->p3_am[i*6 + eu_delay[j]] = st->eu[i*4 + j];
         }
     }
 
@@ -113,7 +113,7 @@ static void interleaver_ma1(decode_t *st)
             st->viterbi_p1_am[i] = 0;
             break;
         default:
-            st->viterbi_p1_am[i] = st->p1_am[offset++];
+            st->viterbi_p1_am[i] = st->p1_am[offset++] ? 1 : -1;
         }
     }
 
@@ -128,7 +128,7 @@ static void interleaver_ma1(decode_t *st)
             st->viterbi_p3_am[i] = 0;
             break;
         default:
-            st->viterbi_p3_am[i] = st->p3_am[offset++];
+            st->viterbi_p3_am[i] = st->p3_am[offset++] ? 1 : -1;
         }
     }
 }
