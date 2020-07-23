@@ -551,7 +551,7 @@ void frame_process(frame_t *st, size_t length)
 
 void frame_push(frame_t *st, uint8_t *bits, size_t length)
 {
-    unsigned int start, offset;
+    unsigned int start, offset, pci_len;
     unsigned int i, j = 0, h = 0, header = 0, val = 0;
     uint8_t *ptr = st->buffer;
 
@@ -560,10 +560,22 @@ void frame_push(frame_t *st, uint8_t *bits, size_t length)
     case P1_FRAME_LEN:
         start = P1_FRAME_LEN - 30000;
         offset = 1248;
+        pci_len = 24;
         break;
     case P3_FRAME_LEN:
         start = 120;
         offset = 184;
+        pci_len = 24;
+        break;
+    case 3750:
+        start = 120;
+        offset = 160;
+        pci_len = 22;
+        break;
+    case 24000:
+        start = 120;
+        offset = 992;
+        pci_len = 24;
         break;
     default:
         log_error("Unknown frame length: %d", length);
@@ -573,7 +585,7 @@ void frame_push(frame_t *st, uint8_t *bits, size_t length)
     {
         // swap bit order
         uint8_t bit = bits[((i>>3)<<3) + 7 - (i & 7)];
-        if (i >= start && ((i - start) % offset) == 0 && h < PCI_LEN)
+        if (i >= start && ((i - start) % offset) == 0 && h < pci_len)
         {
             header = (header << 1) | bit;
             ++h;
@@ -591,6 +603,7 @@ void frame_push(frame_t *st, uint8_t *bits, size_t length)
     }
 
     st->pci = header;
+    printf("%d %d %d\n", length, h, header);
     frame_process(st, ptr - st->buffer);
 }
 

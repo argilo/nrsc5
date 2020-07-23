@@ -21,10 +21,10 @@ typedef struct
     uint8_t buffer_t[25 * BLKSZ * 8];
     unsigned int idx_pu_pl_s_t;
 
-    uint8_t bl[18000 + DIVERSITY_DELAY];
-    uint8_t bu[18000 + DIVERSITY_DELAY];
-    uint8_t ml[18000];
-    uint8_t mu[18000];
+    uint8_t bl[18000];
+    uint8_t bu[18000];
+    uint8_t ml[18000 + DIVERSITY_DELAY];
+    uint8_t mu[18000 + DIVERSITY_DELAY];
     uint8_t el[12000];
     uint8_t eu[24000];
 
@@ -39,6 +39,13 @@ typedef struct
     int8_t viterbi_p3[P3_FRAME_LEN * 3];
     uint8_t scrambler_p3[P3_FRAME_LEN];
 
+    int8_t p1_am[72000];
+    int8_t viterbi_p1_am[90000];
+    uint8_t scrambler_p1_am[3750];
+    uint8_t p3_am[36000];
+    int8_t viterbi_p3_am[72000];
+    uint8_t scrambler_p3_am[24000];
+
     pids_t pids;
 } decode_t;
 
@@ -46,6 +53,7 @@ void decode_process_p1(decode_t *st);
 void decode_process_pids(decode_t *st);
 void decode_process_p3(decode_t *st);
 void decode_process_pids_am(decode_t *st);
+void decode_process_p1_p3_am(decode_t *st);
 static inline unsigned int decode_get_block(decode_t *st)
 {
     return st->idx_pm / (720 * BLKSZ);
@@ -90,7 +98,7 @@ static inline void decode_push_pl_pu_s_t(decode_t *st, uint8_t sym_pl, uint8_t s
     st->idx_pu_pl_s_t++;
     if (st->idx_pu_pl_s_t == 25 * BLKSZ * 8)
     {
-        //decode_process_p1_p3_am(st);
+        decode_process_p1_p3_am(st);
         st->idx_pu_pl_s_t = 0;
     }
 }

@@ -33,77 +33,105 @@ static int eu_delay[] = { 2, 3, 5, 4 };
 static int pids_il_delay[] = { 0, 1, 12, 13, 6, 5, 18, 17, 11, 7, 23, 19 };
 static int pids_iu_delay[] = { 2, 4, 14, 16, 3, 8, 15, 20, 9, 10, 21, 22 };
 
-static void bit_map(unsigned char matrix[25 * BLKSZ * 8], int b, int k, int bits)
+static int bit_map(unsigned char matrix[25 * BLKSZ * 8], int b, int k, int p)
 {
     int col = (9*k) % 25;
     int row = (11*col + 16*(k/25) + 11*(k/50)) % 32;
-    matrix[25 * (b*BLKSZ + row) + col] |= bits;
+    return (matrix[25 * (b*BLKSZ + row) + col] >> p) & 1;
 }
 
-/*
 static void interleaver_ma1(decode_t *st)
 {
-    for (int i = 0; i < 6000; i++)
-    {
-        for (int j = 0; j < 3; j++)
-        {
-            st->bl[DIVERSITY_DELAY + i*3 + j] = p1_g[i*12 + bl_delay[j]];
-            st->ml[i*3 + j] = p1_g[i*12 + ml_delay[j]];
-            st->bu[DIVERSITY_DELAY + i*3 + j] = p1_g[i*12 + bu_delay[j]];
-            st->mu[i*3 + j] = p1_g[i*12 + mu_delay[j]];
-        }
-        for (int j = 0; j < 2; j++)
-        {
-            st->el[i*2 + j] = p3_g[i*6 + el_delay[j]];
-        }
-        for (int j = 0; j < 4; j++)
-        {
-            st->eu[i*4 + j] = p3_g[i*6 + eu_delay[j]];
-        }
-    }
-
     int b, k, p;
     for (int n = 0; n < 18000; n++)
     {
         b = n/2250;
         k = (n + n/750 + 1) % 750;
         p = n % 3;
-        bit_map(st->buffer_pl, b, k, st->bl[n] << p);
+        st->bl[n] = bit_map(st->buffer_pl, b, k, p);
 
         b = (3*n + 3) % 8;
         k = (n + n/3000 + 3) % 750;
         p = 3 + (n % 3);
-        bit_map(st->buffer_pl, b, k, st->ml[n] << p);
+        st->ml[DIVERSITY_DELAY + n] = bit_map(st->buffer_pl, b, k, p);
 
         b = n/2250;
         k = (n + n/750) % 750;
         p = n % 3;
-        bit_map(st->buffer_pu, b, k, st->bu[n] << p);
+        st->bu[n] = bit_map(st->buffer_pu, b, k, p);
 
         b = (3*n) % 8;
         k = (n + n/3000 + 2) % 750;
         p = 3 + (n % 3);
-        bit_map(st->buffer_pu, b, k, st->mu[n] << p);
+        st->mu[DIVERSITY_DELAY + n] = bit_map(st->buffer_pu, b, k, p);
     }
     for (int n = 0; n < 12000; n++)
     {
         b = (3*n + n/3000) % 8;
         k = (n + (n/6000)) % 750;
         p = n % 2;
-        bit_map(st->buffer_t, b, k, st->el[n] << p);
+        st->el[n] = bit_map(st->buffer_t, b, k, p);
     }
     for (int n = 0; n < 24000; n++)
     {
         b = (3*n + n/3000 + 2*(n/12000)) % 8;
         k = (n + (n/6000)) % 750;
         p = n % 4;
-        bit_map(st->buffer_s, b, k, st->eu[n] << p);
+        st->eu[n] = bit_map(st->buffer_s, b, k, p);
     }
 
-    memmove(st->bl, st->bl + 18000, DIVERSITY_DELAY);
-    memmove(st->bu, st->bu + 18000, DIVERSITY_DELAY);
+    for (int i = 0; i < 6000; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            st->p1_am[i*12 + bl_delay[j]] = st->bl[i*3 + j] ? 1 : -1;
+            st->p1_am[i*12 + ml_delay[j]] = st->ml[i*3 + j] ? 1 : -1;
+            st->p1_am[i*12 + bu_delay[j]] = st->bu[i*3 + j] ? 1 : -1;
+            st->p1_am[i*12 + mu_delay[j]] = st->mu[i*3 + j] ? 1 : -1;
+        }
+        for (int j = 0; j < 2; j++)
+        {
+            st->p3_am[i*6 + el_delay[j]] = st->el[i*2 + j] ? 1 : -1;
+        }
+        for (int j = 0; j < 4; j++)
+        {
+            st->p3_am[i*6 + eu_delay[j]] = st->eu[i*4 + j] ? 1 : -1;
+        }
+    }
+
+    memmove(st->ml, st->ml + 18000, DIVERSITY_DELAY);
+    memmove(st->mu, st->mu + 18000, DIVERSITY_DELAY);
+
+    int offset = 0;
+    for (int i = 0; i < 90000; i++)
+    {
+        switch (i % 15)
+        {
+        case 1:
+        case 4:
+        case 7:
+            st->viterbi_p1_am[i] = 0;
+            break;
+        default:
+            st->viterbi_p1_am[i] = st->p1_am[offset++];
+        }
+    }
+
+    offset = 0;
+    for (int i = 0; i < 72000; i++)
+    {
+        switch (i % 6)
+        {
+        case 1:
+        case 4:
+        case 5:
+            st->viterbi_p3_am[i] = 0;
+            break;
+        default:
+            st->viterbi_p3_am[i] = st->p3_am[offset++];
+        }
+    }
 }
-*/
 
 // calculate channel bit error rate by re-encoding and comparing to the input
 static float calc_cber(int8_t *coded, uint8_t *decoded)
@@ -270,6 +298,20 @@ void decode_process_pids_am(decode_t *st)
     nrsc5_conv_decode_e3(st->viterbi_pids, st->scrambler_pids, PIDS_FRAME_LEN);
     descramble(st->scrambler_pids, PIDS_FRAME_LEN);
     pids_frame_push(&st->pids, st->scrambler_pids);
+}
+
+void decode_process_p1_p3_am(decode_t *st)
+{
+    interleaver_ma1(st);
+    for (int block = 0; block < 8; block++)
+    {
+        nrsc5_conv_decode_e1(st->viterbi_p1_am + (block * 11250), st->scrambler_p1_am, 3750);
+        descramble(st->scrambler_p1_am, 3750);
+        frame_push(&st->input->frame, st->scrambler_p1_am, 3750);
+    }
+    nrsc5_conv_decode_e2(st->viterbi_p3_am, st->scrambler_p3_am, 24000);
+    descramble(st->scrambler_p3_am, 24000);
+    frame_push(&st->input->frame, st->scrambler_p3_am, 24000);
 }
 
 void decode_reset(decode_t *st)
