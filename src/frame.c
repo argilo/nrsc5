@@ -142,7 +142,8 @@ static uint16_t fcs16(const uint8_t *cp, int len)
 
 static int has_fixed(frame_t *st)
 {
-    return st->pci == PCI_AUDIO_FIXED || st->pci == PCI_AUDIO_FIXED_OPP;
+    return (st->pci & 0xFFFFFC) == (PCI_AUDIO_FIXED & 0xFFFFFC)
+           || (st->pci & 0xFFFFFC) == (PCI_AUDIO_FIXED & 0xFFFFFC);
 }
 
 static int fix_header(frame_t *st, uint8_t *buf)
@@ -587,7 +588,7 @@ void frame_push(frame_t *st, uint8_t *bits, size_t length)
         uint8_t bit = bits[((i>>3)<<3) + 7 - (i & 7)];
         if (i >= start && ((i - start) % offset) == 0 && h < pci_len)
         {
-            header = (header << 1) | bit;
+            header |= bit << (23 - h);
             ++h;
         }
         else
