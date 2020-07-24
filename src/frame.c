@@ -603,7 +603,6 @@ void frame_push(frame_t *st, uint8_t *bits, size_t length)
     }
 
     st->pci = header;
-    printf("%d %d %d\n", length, h, header);
     frame_process(st, ptr - st->buffer);
 }
 

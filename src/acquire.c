@@ -154,7 +154,7 @@ void acquire_process(acquire_t *st)
     }
 
     for (i = 0; i < st->fftcp * (ACQUIRE_SYMBOLS + 1); i++)
-        st->buffer[i] = cq15_to_cf_conj(st->in_buffer[i]);
+        st->buffer[i] = conjf(cq15_to_cf_conj(st->in_buffer[i])); // TODO: Only conjugate for AM
 
     sync_adjust(&st->input->sync, st->fftcp / 2 - samperr);
     angle -= 2 * M_PI * st->cfo;

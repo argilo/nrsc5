@@ -606,7 +606,7 @@ void sync_push(sync_t *st, float complex *fftout)
     }
     else
     {
-        for (i = 128-81; i < 128+81; i++)
+        for (i = 128-81; i <= 128+81; i++)
         {
             st->buffer[i][st->idx] = fftout[i];
         }
