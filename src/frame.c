@@ -493,7 +493,7 @@ void frame_process(frame_t *st, size_t length)
         offset += 14;
         lc_bits = calc_lc_bits(&hdr);
         loc_bytes = ((lc_bits * hdr.nop) + 4) / 8;
-        if (start + hdr.la_location < offset + loc_bytes || start + hdr.la_location >= audio_end)
+        if (start + hdr.la_location + 1 < offset + loc_bytes || start + hdr.la_location >= audio_end)
             return;
 
         for (j = 0; j < hdr.nop; j++)
