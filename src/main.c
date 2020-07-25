@@ -526,7 +526,7 @@ static int parse_args(state_t *st, int argc, char *argv[])
     st->gain = -1;
     st->ppm_error = INT_MIN;
 
-    while ((opt = getopt_long(argc, argv, "r:w:o:d:p:g:ql:vH:a", long_opts, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "r:w:o:d:p:g:ql:vH:", long_opts, NULL)) != -1)
     {
         switch (opt)
         {
