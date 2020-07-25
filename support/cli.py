@@ -12,6 +12,7 @@ import pyaudio
 
 import nrsc5
 
+
 class NRSC5CLI:
     def __init__(self):
         self.radio = nrsc5.NRSC5(lambda evt_type, evt: self.callback(evt_type, evt))

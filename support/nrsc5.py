@@ -456,15 +456,15 @@ class NRSC5:
         return version.value.decode()
 
     @staticmethod
-    def service_data_type_name(type):
+    def service_data_type_name(service_data_type):
         name = ctypes.c_char_p()
-        NRSC5.libnrsc5.nrsc5_service_data_type_name(type.value, ctypes.byref(name))
+        NRSC5.libnrsc5.nrsc5_service_data_type_name(service_data_type.value, ctypes.byref(name))
         return name.value.decode()
 
     @staticmethod
-    def program_type_name(type):
+    def program_type_name(program_type):
         name = ctypes.c_char_p()
-        NRSC5.libnrsc5.nrsc5_program_type_name(type.value, ctypes.byref(name))
+        NRSC5.libnrsc5.nrsc5_program_type_name(program_type.value, ctypes.byref(name))
         return name.value.decode()
 
     def open(self, device_index):
