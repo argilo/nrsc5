@@ -585,7 +585,10 @@ void frame_push(frame_t *st, uint8_t *bits, size_t length)
     for (i = 0; i < length; ++i)
     {
         // swap bit order
-        uint8_t bit = bits[((i>>3)<<3) + 7 - (i & 7)];
+        unsigned int byte_start = (i>>3)<<3;
+        unsigned int byte_len = (length - byte_start < 8) ? length - byte_start : 8;
+        uint8_t bit = bits[byte_start + byte_len - 1 - (i & 7)];
+
         if (i >= start && ((i - start) % offset) == 0 && h < pci_len)
         {
             header |= bit << (23 - h);
