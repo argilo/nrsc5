@@ -555,11 +555,9 @@ void sync_process_am(sync_t *st)
 
             pl_mult[col] = 2 * CMPLXF(2.5, -2.5) / (st->buffer[128-57-col][train1] + st->buffer[128-57-col][train2]);
             pu_mult[col] = 2 * CMPLXF(2.5, -2.5) / (st->buffer[128+57+col][train1] + st->buffer[128+57+col][train2]);
-            //printf("%f %f %f   %f %f %f\n", crealf(pl_mult[col]), cimagf(pl_mult[col]), cargf(pl_mult[col]), crealf(pu_mult[col]), cimagf(pu_mult[col]), cargf(pu_mult[col]));
             s_mult[col] = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+28+col][train1] + st->buffer[128+28+col][train2]);
             t_mult[col] = 2 * CMPLXF(-0.5, 0.5) / (st->buffer[128+2+col][train1] + st->buffer[128+2+col][train2]);
         }
-        //printf("\n");
 
         for (int n = 0; n < BLKSZ; n++)
         {

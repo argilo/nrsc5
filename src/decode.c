@@ -276,21 +276,17 @@ void decode_process_pids_am(decode_t *st)
 
         k = (n + (n/60) + 11) % 30;
         row = (11 * (k + (k/15)) + 3) % 32;
-        // matrix[0][offset + row] |= (il[n] << p);
         il[n] = (st->buffer_pids_am[row*2] >> p) & 1;
 
         k = (n + (n/60)) % 30;
         row = (11 * (k + (k/15)) + 3) % 32;
-        // matrix[1][offset + row] |= (iu[n] << p);
         iu[n] = (st->buffer_pids_am[row*2 + 1] >> p) & 1;
     }
 
     /* 1012s.pdf figure 10-5 */
     for (int i = 0; i < 10; i++) {
       for (int j = 0; j < 12; j++) {
-        // il[i*12 + j] = in[i*24 + pids_il_delay[j]];
         st->viterbi_pids[i*24 + pids_il_delay[j]] = il[i*12 + j] ? 1 : -1;
-        // iu[i*12 + j] = in[i*24 + pids_iu_delay[j]];
         st->viterbi_pids[i*24 + pids_iu_delay[j]] = iu[i*12 + j] ? 1 : -1;
       }
     }

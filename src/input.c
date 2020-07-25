@@ -191,7 +191,6 @@ void input_push_cu8(input_t *st, uint8_t *buf, uint32_t len)
             }
             if ((st->offset & 0xf) == 0xf) {
                 halfband_q15_execute(st->decim[4], st->stages[3], &st->buffer[st->avail++]);
-                // fwrite(&st->buffer[st->avail-1], sizeof(cint16_t), 1, stdout);
             }
             st->offset++;
         }
