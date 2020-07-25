@@ -133,34 +133,50 @@ static void interleaver_ma1(decode_t *st)
     }
 }
 
-// calculate channel bit error rate by re-encoding and comparing to the input
-static float calc_cber(int8_t *coded, uint8_t *decoded)
+// calculate number of bit errors by re-encoding and comparing to the input
+static int bit_errors(int8_t *coded, uint8_t *decoded, int k, int frame_len,
+                      unsigned int g1, unsigned int g2, unsigned int g3,
+                      uint8_t *puncture, int puncture_len)
 {
-    uint8_t r = 0;
+    uint16_t r = 0;
     unsigned int i, j, errors = 0;
 
     // tail biting
-    for (i = 0; i < 6; i++)
-        r = (r >> 1) | (decoded[P1_FRAME_LEN - 6 + i] << 6);
+    for (i = 0; i < (k-1); i++)
+        r = (r >> 1) | (decoded[frame_len - (k-1) + i] << (k-1));
 
-    for (i = 0, j = 0; i < P1_FRAME_LEN; i++)
+    for (i = 0, j = 0; i < frame_len; i++, j += 3)
     {
         // shift in new bit
-        r = (r >> 1) | (decoded[i] << 6);
+        r = (r >> 1) | (decoded[i] << (k-1));
 
-        if ((coded[j++] > 0) != __builtin_parity(r & 0133))
+        if (puncture[j % puncture_len] && ((coded[j] > 0) != __builtin_parity(r & g1)))
             errors++;
-
-        if ((coded[j++] > 0) != __builtin_parity(r & 0171))
+        if (puncture[(j+1) % puncture_len] && ((coded[j+1] > 0) != __builtin_parity(r & g2)))
             errors++;
-
-        if ((j % 6) == 5)
-            j++;
-        else if ((coded[j++] > 0) != __builtin_parity(r & 0165))
+        if (puncture[(j+2) % puncture_len] && ((coded[j+2] > 0) != __builtin_parity(r & g3)))
             errors++;
     }
 
-    return (float) errors / P1_FRAME_LEN_ENCODED;
+    return errors;
+}
+
+static int bit_errors_p1_fm(int8_t *coded, uint8_t *decoded)
+{
+    uint8_t puncture[] = {1, 1, 1, 1, 1, 0};
+    return bit_errors(coded, decoded, 7, P1_FRAME_LEN, 0133, 0171, 0165, puncture, 6);
+}
+
+static int bit_errors_p1_am(int8_t *coded, uint8_t *decoded)
+{
+    uint8_t puncture[] = {1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1};
+    return bit_errors(coded, decoded, 9, 3750, 0561, 0657, 0711, puncture, 15);
+}
+
+static int bit_errors_p3_am(int8_t *coded, uint8_t *decoded)
+{
+    uint8_t puncture[] = {1, 0, 1, 1, 0, 0};
+    return bit_errors(coded, decoded, 9, 24000, 0561, 0753, 0711, puncture, 6);
 }
 
 static void descramble(uint8_t *buf, unsigned int length)
@@ -201,7 +217,7 @@ void decode_process_p1(decode_t *st)
     }
 
     nrsc5_conv_decode_p1(st->viterbi_p1, st->scrambler_p1);
-    nrsc5_report_ber(st->input->radio, calc_cber(st->viterbi_p1, st->scrambler_p1));
+    nrsc5_report_ber(st->input->radio, (float) bit_errors_p1_fm(st->viterbi_p1, st->scrambler_p1) / P1_FRAME_LEN_ENCODED);
     descramble(st->scrambler_p1, P1_FRAME_LEN);
     frame_push(&st->input->frame, st->scrambler_p1, P1_FRAME_LEN);
 }
@@ -298,16 +314,22 @@ void decode_process_pids_am(decode_t *st)
 
 void decode_process_p1_p3_am(decode_t *st)
 {
+    int total_errors = 0;
+
     interleaver_ma1(st);
     for (int block = 0; block < 8; block++)
     {
         nrsc5_conv_decode_e1(st->viterbi_p1_am + (block * 11250), st->scrambler_p1_am, 3750);
+        total_errors += bit_errors_p1_am(st->viterbi_p1_am + (block * 11250), st->scrambler_p1_am);
         descramble(st->scrambler_p1_am, 3750);
         frame_push(&st->input->frame, st->scrambler_p1_am, 3750);
     }
     nrsc5_conv_decode_e2(st->viterbi_p3_am, st->scrambler_p3_am, 24000);
+    total_errors += bit_errors_p3_am(st->viterbi_p3_am, st->scrambler_p3_am);
     descramble(st->scrambler_p3_am, 24000);
     frame_push(&st->input->frame, st->scrambler_p3_am, 24000);
+
+    nrsc5_report_ber(st->input->radio, (float) total_errors / (9000 * 8 + 36000));
 }
 
 void decode_reset(decode_t *st)
