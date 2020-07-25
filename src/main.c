@@ -506,7 +506,7 @@ static void *input_main(void *arg)
 
 static void help(const char *progname)
 {
-    fprintf(stderr, "Usage: %s [-v] [-q] [-a] [-l log-level] [-d device-index] [-H rtltcp-host] [-p ppm-error] [-g gain] [-r iq-input] [-w iq-output] [-o wav-output] [--dump-hdc hdc-output] [--dump-aas-files directory] frequency program\n", progname);
+    fprintf(stderr, "Usage: %s [-v] [-q] [--am] [-l log-level] [-d device-index] [-H rtltcp-host] [-p ppm-error] [-g gain] [-r iq-input] [-w iq-output] [-o wav-output] [--dump-hdc hdc-output] [--dump-aas-files directory] frequency program\n", progname);
 }
 
 static int parse_args(state_t *st, int argc, char *argv[])
@@ -514,6 +514,7 @@ static int parse_args(state_t *st, int argc, char *argv[])
     static const struct option long_opts[] = {
         { "dump-aas-files", required_argument, NULL, 1 },
         { "dump-hdc", required_argument, NULL, 2 },
+        { "am", no_argument, NULL, 3 },
         { 0 }
     };
     const char *version = NULL;
@@ -534,6 +535,9 @@ static int parse_args(state_t *st, int argc, char *argv[])
             break;
         case 2:
             hdc_name = optarg;
+            break;
+        case 3:
+            st->mode = NRSC5_MODE_AM;
             break;
         case 'r':
             st->input_name = strdup(optarg);
@@ -570,9 +574,6 @@ static int parse_args(state_t *st, int argc, char *argv[])
             return 1;
         case 'H':
             st->rtltcp_host = strdup(optarg);
-            break;
-        case 'a':
-            st->mode = NRSC5_MODE_AM;
             break;
         default:
             help(argv[0]);
