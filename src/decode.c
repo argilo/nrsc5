@@ -53,7 +53,7 @@ static void interleaver_ma1(decode_t *st)
         b = (3*n + 3) % 8;
         k = (n + n/3000 + 3) % 750;
         p = 3 + (n % 3);
-        st->ml[DIVERSITY_DELAY + n] = bit_map(st->buffer_pl, b, k, p);
+        st->ml[DIVERSITY_DELAY_AM + n] = bit_map(st->buffer_pl, b, k, p);
 
         b = n/2250;
         k = (n + n/750) % 750;
@@ -63,7 +63,7 @@ static void interleaver_ma1(decode_t *st)
         b = (3*n) % 8;
         k = (n + n/3000 + 2) % 750;
         p = 3 + (n % 3);
-        st->mu[DIVERSITY_DELAY + n] = bit_map(st->buffer_pu, b, k, p);
+        st->mu[DIVERSITY_DELAY_AM + n] = bit_map(st->buffer_pu, b, k, p);
     }
     for (int n = 0; n < 12000; n++)
     {
@@ -99,11 +99,11 @@ static void interleaver_ma1(decode_t *st)
         }
     }
 
-    memmove(st->ml, st->ml + 18000, DIVERSITY_DELAY);
-    memmove(st->mu, st->mu + 18000, DIVERSITY_DELAY);
+    memmove(st->ml, st->ml + 18000, DIVERSITY_DELAY_AM);
+    memmove(st->mu, st->mu + 18000, DIVERSITY_DELAY_AM);
 
     int offset = 0;
-    for (int i = 0; i < 90000; i++)
+    for (int i = 0; i < 8 * P1_FRAME_LEN_AM * 3; i++)
     {
         switch (i % 15)
         {
@@ -164,13 +164,13 @@ static int bit_errors(int8_t *coded, uint8_t *decoded, int k, int frame_len,
 static int bit_errors_p1_fm(int8_t *coded, uint8_t *decoded)
 {
     uint8_t puncture[] = {1, 1, 1, 1, 1, 0};
-    return bit_errors(coded, decoded, 7, P1_FRAME_LEN, 0133, 0171, 0165, puncture, 6);
+    return bit_errors(coded, decoded, 7, P1_FRAME_LEN_FM, 0133, 0171, 0165, puncture, 6);
 }
 
 static int bit_errors_p1_am(int8_t *coded, uint8_t *decoded)
 {
     uint8_t puncture[] = {1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1};
-    return bit_errors(coded, decoded, 9, 3750, 0561, 0657, 0711, puncture, 15);
+    return bit_errors(coded, decoded, 9, P1_FRAME_LEN_AM, 0561, 0657, 0711, puncture, 15);
 }
 
 static int bit_errors_p3_am(int8_t *coded, uint8_t *decoded)
@@ -204,7 +204,7 @@ void decode_process_p1(decode_t *st)
         11, 3, 19, 7, 15, 9, 17, 1, 13, 5
     };
     unsigned int i, out = 0;
-    for (i = 0; i < P1_FRAME_LEN_ENCODED; i++)
+    for (i = 0; i < P1_FRAME_LEN_ENCODED_FM; i++)
     {
         int partition = v[i % J];
         int block = ((i / J) + (partition * 7)) % B;
@@ -217,9 +217,9 @@ void decode_process_p1(decode_t *st)
     }
 
     nrsc5_conv_decode_p1(st->viterbi_p1, st->scrambler_p1);
-    nrsc5_report_ber(st->input->radio, (float) bit_errors_p1_fm(st->viterbi_p1, st->scrambler_p1) / P1_FRAME_LEN_ENCODED);
-    descramble(st->scrambler_p1, P1_FRAME_LEN);
-    frame_push(&st->input->frame, st->scrambler_p1, P1_FRAME_LEN);
+    nrsc5_report_ber(st->input->radio, (float) bit_errors_p1_fm(st->viterbi_p1, st->scrambler_p1) / P1_FRAME_LEN_ENCODED_FM);
+    descramble(st->scrambler_p1, P1_FRAME_LEN_FM);
+    frame_push(&st->input->frame, st->scrambler_p1, P1_FRAME_LEN_FM);
 }
 
 void decode_process_pids(decode_t *st)
@@ -234,7 +234,7 @@ void decode_process_pids(decode_t *st)
     {
         int partition = v[i % J];
         int block = decode_get_block(st) - 1;
-        int k = ((i / J) % (PIDS_FRAME_LEN_ENCODED_FM / J)) + (P1_FRAME_LEN_ENCODED / (J * B));
+        int k = ((i / J) % (PIDS_FRAME_LEN_ENCODED_FM / J)) + (P1_FRAME_LEN_ENCODED_FM / (J * B));
         int row = (k * 11) % 32;
         int column = (k * 11 + k / (32*9)) % C;
         st->viterbi_pids[out++] = st->buffer_pm[(block * 32 + row) * 720 + partition * C + column];
@@ -319,10 +319,10 @@ void decode_process_p1_p3_am(decode_t *st)
     interleaver_ma1(st);
     for (int block = 0; block < 8; block++)
     {
-        nrsc5_conv_decode_e1(st->viterbi_p1_am + (block * 11250), st->scrambler_p1_am, 3750);
+        nrsc5_conv_decode_e1(st->viterbi_p1_am + (block * 11250), st->scrambler_p1_am, P1_FRAME_LEN_AM);
         total_errors += bit_errors_p1_am(st->viterbi_p1_am + (block * 11250), st->scrambler_p1_am);
-        descramble(st->scrambler_p1_am, 3750);
-        frame_push(&st->input->frame, st->scrambler_p1_am, 3750);
+        descramble(st->scrambler_p1_am, P1_FRAME_LEN_AM);
+        frame_push(&st->input->frame, st->scrambler_p1_am, P1_FRAME_LEN_AM);
     }
     nrsc5_conv_decode_e2(st->viterbi_p3_am, st->scrambler_p3_am, 24000);
     total_errors += bit_errors_p3_am(st->viterbi_p3_am, st->scrambler_p3_am);

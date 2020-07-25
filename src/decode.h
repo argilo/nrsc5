@@ -4,7 +4,7 @@
 #include "defines.h"
 #include "pids.h"
 
-#define DIVERSITY_DELAY (18000 * 3)
+#define DIVERSITY_DELAY_AM (18000 * 3)
 
 typedef struct
 {
@@ -23,13 +23,13 @@ typedef struct
 
     uint8_t bl[18000];
     uint8_t bu[18000];
-    uint8_t ml[18000 + DIVERSITY_DELAY];
-    uint8_t mu[18000 + DIVERSITY_DELAY];
+    uint8_t ml[18000 + DIVERSITY_DELAY_AM];
+    uint8_t mu[18000 + DIVERSITY_DELAY_AM];
     uint8_t el[12000];
     uint8_t eu[24000];
 
-    int8_t viterbi_p1[P1_FRAME_LEN * 3];
-    uint8_t scrambler_p1[P1_FRAME_LEN];
+    int8_t viterbi_p1[P1_FRAME_LEN_FM * 3];
+    uint8_t scrambler_p1[P1_FRAME_LEN_FM];
     int8_t viterbi_pids[PIDS_FRAME_LEN * 3];
     uint8_t scrambler_pids[PIDS_FRAME_LEN];
     int8_t internal_p3[P3_FRAME_LEN * 32];
@@ -40,8 +40,8 @@ typedef struct
     uint8_t scrambler_p3[P3_FRAME_LEN];
 
     uint8_t p1_am[72000];
-    int8_t viterbi_p1_am[90000];
-    uint8_t scrambler_p1_am[3750];
+    int8_t viterbi_p1_am[8 * P1_FRAME_LEN_AM * 3];
+    uint8_t scrambler_p1_am[P1_FRAME_LEN_AM];
     uint8_t p3_am[36000];
     int8_t viterbi_p3_am[72000];
     uint8_t scrambler_p3_am[24000];

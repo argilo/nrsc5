@@ -558,8 +558,8 @@ void frame_push(frame_t *st, uint8_t *bits, size_t length)
 
     switch (length)
     {
-    case P1_FRAME_LEN:
-        start = P1_FRAME_LEN - 30000;
+    case P1_FRAME_LEN_FM:
+        start = P1_FRAME_LEN_FM - 30000;
         offset = 1248;
         pci_len = 24;
         break;
@@ -568,7 +568,7 @@ void frame_push(frame_t *st, uint8_t *bits, size_t length)
         offset = 184;
         pci_len = 24;
         break;
-    case 3750:
+    case P1_FRAME_LEN_AM:
         start = 120;
         offset = 160;
         pci_len = 22;

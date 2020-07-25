@@ -29,9 +29,10 @@
 // index of last upper sideband subcarrier
 #define UB_END ((FFT_FM / 2) + 546)
 // bits per P1 frame
-#define P1_FRAME_LEN 146176
+#define P1_FRAME_LEN_FM 146176
+#define P1_FRAME_LEN_AM 3750
 // bits per encoded P1 frame
-#define P1_FRAME_LEN_ENCODED (P1_FRAME_LEN * 5 / 2)
+#define P1_FRAME_LEN_ENCODED_FM (P1_FRAME_LEN_FM * 5 / 2)
 // bits per PIDS frame
 #define PIDS_FRAME_LEN 80
 // bits per encoded PIDS frame
@@ -44,7 +45,7 @@
 // bits per L2 PCI
 #define PCI_LEN 24
 // bytes per L2 PDU (max)
-#define MAX_PDU_LEN ((P1_FRAME_LEN - PCI_LEN) / 8)
+#define MAX_PDU_LEN ((P1_FRAME_LEN_FM - PCI_LEN) / 8)
 // number of programs (max)
 #define MAX_PROGRAMS 8
 
