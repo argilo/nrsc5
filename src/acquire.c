@@ -300,10 +300,21 @@ void acquire_init(acquire_t *st, input_t *input)
 void acquire_set_mode(acquire_t *st, int mode)
 {
     st->mode = mode;
-    st->fft = (st->mode == NRSC5_MODE_FM) ? FFT_FM : FFT_AM;
-    st->fftcp = (st->mode == NRSC5_MODE_FM) ? FFTCP_FM : FFTCP_AM;
-    st->cp = (st->mode == NRSC5_MODE_FM) ? CP_FM : CP_AM;
-    st->shape = (st->mode == NRSC5_MODE_FM) ? st->shape_fm : st->shape_am;
+
+    if (st->mode == NRSC5_MODE_FM)
+    {
+        st->fft = FFT_FM;
+        st->fftcp = FFTCP_FM;
+        st->cp = CP_FM;
+        st->shape = st->shape_fm;
+    }
+    else
+    {
+        st->fft = FFT_AM;
+        st->fftcp = FFTCP_AM;
+        st->cp = CP_AM;
+        st->shape = st->shape_am;
+    }
 }
 
 void acquire_free(acquire_t *st)
