@@ -19,6 +19,7 @@
 #include "acquire.h"
 #include "defines.h"
 #include "input.h"
+#include "private.h"
 
 #define FILTER_DELAY 15
 
@@ -118,8 +119,8 @@ void acquire_process(acquire_t *st)
         cint16_t y;
         for (i = 0; i < st->fftcp * (ACQUIRE_SYMBOLS + 1); i++)
         {
-            fir_q15_execute(st->filter, &st->in_buffer[i], &y);
-            st->buffer[i] = conjf(cq15_to_cf_conj(y)); // TODO: conjf for AM only
+            fir_q15_execute((st->input->radio->mode == NRSC5_MODE_FM) ? st->filter_fm : st->filter_am, &st->in_buffer[i], &y);
+            st->buffer[i] = (st->input->radio->mode == NRSC5_MODE_FM) ? cq15_to_cf_conj(y) : cq15_to_cf(y);
         }
 
         memset(st->sums, 0, sizeof(float complex) * st->fftcp);
@@ -154,7 +155,7 @@ void acquire_process(acquire_t *st)
     }
 
     for (i = 0; i < st->fftcp * (ACQUIRE_SYMBOLS + 1); i++)
-        st->buffer[i] = conjf(cq15_to_cf_conj(st->in_buffer[i])); // TODO: Only conjugate for AM
+        st->buffer[i] = (st->input->radio->mode == NRSC5_MODE_FM) ? cq15_to_cf_conj(st->in_buffer[i]) : cq15_to_cf(st->in_buffer[i]);
 
     sync_adjust(&st->input->sync, st->fftcp / 2 - samperr);
     angle -= 2 * M_PI * st->cfo;
@@ -204,14 +205,10 @@ void acquire_process(acquire_t *st)
         }
         st->phase /= cabsf(st->phase);
 
-        fftwf_execute(st->fft_plan);
+        fftwf_execute((st->input->radio->mode == NRSC5_MODE_FM) ? st->fft_plan_fm : st->fft_plan_am);
         fftshift(st->fftout, st->fft);
-        //complex float ref = st->fftout[128+1] - conjf(st->fftout[128-1]);
-        //int thisbit = (cargf(ref) > 0) ? 1 : 0;
-        //printf("%d", thisbit);
         sync_push(&st->input->sync, st->fftout);
     }
-    //printf("\n");
 
     keep = st->fftcp + (st->fftcp / 2 - samperr);
     memmove(&st->in_buffer[0], &st->in_buffer[st->idx - keep], sizeof(cint16_t) * keep);
@@ -246,7 +243,8 @@ unsigned int acquire_push(acquire_t *st, cint16_t *buf, unsigned int length)
 
 void acquire_reset(acquire_t *st)
 {
-    firdecim_q15_reset(st->filter);
+    firdecim_q15_reset(st->filter_fm);
+    firdecim_q15_reset(st->filter_am);
     st->idx = 0;
     st->prev_angle = 0;
     st->phase = 1;
@@ -263,12 +261,11 @@ void acquire_init(acquire_t *st, input_t *input, int mode)
 
     st->input = input;
 
-    if (mode == NRSC5_MODE_FM)
-        st->filter = firdecim_q15_create(filter_taps_fm, sizeof(filter_taps_fm) / sizeof(filter_taps_fm[0]));
-    else
-        st->filter = firdecim_q15_create(filter_taps_am, sizeof(filter_taps_am) / sizeof(filter_taps_am[0]));
+    st->filter_fm = firdecim_q15_create(filter_taps_fm, sizeof(filter_taps_fm) / sizeof(filter_taps_fm[0]));
+    st->filter_am = firdecim_q15_create(filter_taps_am, sizeof(filter_taps_am) / sizeof(filter_taps_am[0]));
 
-    st->fft_plan = fftwf_plan_dft_1d(st->fft, st->fftin, st->fftout, FFTW_FORWARD, 0);
+    st->fft_plan_fm = fftwf_plan_dft_1d(FFT_FM, st->fftin, st->fftout, FFTW_FORWARD, 0);
+    st->fft_plan_am = fftwf_plan_dft_1d(FFT_AM, st->fftin, st->fftout, FFTW_FORWARD, 0);
 
     for (i = 0; i < st->fftcp; ++i)
     {
@@ -286,6 +283,8 @@ void acquire_init(acquire_t *st, input_t *input, int mode)
 
 void acquire_free(acquire_t *st)
 {
-    firdecim_q15_free(st->filter);
-    fftwf_destroy_plan(st->fft_plan);
+    firdecim_q15_free(st->filter_fm);
+    firdecim_q15_free(st->filter_am);
+    fftwf_destroy_plan(st->fft_plan_fm);
+    fftwf_destroy_plan(st->fft_plan_am);
 }

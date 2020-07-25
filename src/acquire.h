@@ -7,14 +7,16 @@
 typedef struct
 {
     struct input_t *input;
-    firdecim_q15 filter;
+    firdecim_q15 filter_fm;
+    firdecim_q15 filter_am;
     cint16_t in_buffer[FFTCP_FM * (ACQUIRE_SYMBOLS + 1)];
     float complex buffer[FFTCP_FM * (ACQUIRE_SYMBOLS + 1)];
     float complex sums[FFTCP_FM];
     float complex fftin[FFT_FM];
     float complex fftout[FFT_FM];
     float shape[FFTCP_FM];
-    fftwf_plan fft_plan;
+    fftwf_plan fft_plan_fm;
+    fftwf_plan fft_plan_am;
 
     unsigned int idx;
     float prev_angle;
