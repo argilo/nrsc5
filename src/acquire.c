@@ -19,7 +19,6 @@
 #include "acquire.h"
 #include "defines.h"
 #include "input.h"
-#include "private.h"
 
 #define FILTER_DELAY 15
 
