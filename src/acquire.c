@@ -99,7 +99,6 @@ void acquire_process(acquire_t *st)
     float angle, angle_diff, angle_factor, max_mag = -1.0f;
     int samperr = 0;
     unsigned int i, j, keep;
-    float complex foo, bar, lastbar, angle_error;
 
     if (st->idx != st->fftcp * (ACQUIRE_SYMBOLS + 1))
         return;
@@ -164,29 +163,32 @@ void acquire_process(acquire_t *st)
 
     phase_increment = cexpf(angle / st->fft * I);
 
-    float complex temp_phase = st->phase;
-    foo = 0;
-    angle_error = 0;
-    for (i = 0; i < ACQUIRE_SYMBOLS; ++i)
+    if (st->mode == NRSC5_MODE_AM)
     {
-        int j;
-        bar = 0;
-        for (j = 0; j < st->fftcp; ++j)
+        float complex full_sum, symbol_sum, last_symbol_sum, angle_error;
+        float complex temp_phase = st->phase;
+        full_sum = 0;
+        angle_error = 0;
+        for (i = 0; i < ACQUIRE_SYMBOLS; ++i)
         {
-            float complex sample = temp_phase * st->buffer[i * st->fftcp + j + samperr];
-            foo += sample;
-            bar += sample;
-            temp_phase *= phase_increment;
+            int j;
+            symbol_sum = 0;
+            for (j = 0; j < st->fftcp; ++j)
+            {
+                float complex sample = temp_phase * st->buffer[i * st->fftcp + j + samperr];
+                full_sum += sample;
+                symbol_sum += sample;
+                temp_phase *= phase_increment;
+            }
+            if (i > 0) {
+                angle_error += (symbol_sum / last_symbol_sum);
+            }
+            temp_phase /= cabsf(temp_phase);
+            last_symbol_sum = symbol_sum;
         }
-        if (i > 0) {
-            angle_error += (bar / lastbar);
-        }
-        temp_phase /= cabsf(temp_phase);
-        lastbar = bar;
+        phase_increment *= cexpf((-cargf(angle_error) / st->fftcp) * I);
+        st->phase *= cexpf(-(cargf(full_sum) - cargf(angle_error) * ACQUIRE_SYMBOLS / 2)*I);
     }
-    phase_increment *= cexpf((-cargf(angle_error) / st->fftcp) * I);
-    st->phase *= cexpf(-(cargf(foo) - cargf(angle_error) * ACQUIRE_SYMBOLS / 2)*I);
-
 
     for (i = 0; i < ACQUIRE_SYMBOLS; ++i)
     {
