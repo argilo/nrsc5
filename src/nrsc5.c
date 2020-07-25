@@ -421,6 +421,7 @@ NRSC5_API int nrsc5_set_mode(nrsc5_t *st, int mode)
     if (mode == NRSC5_MODE_FM || mode == NRSC5_MODE_AM)
     {
         st->mode = mode;
+        input_set_mode(&st->input);
         return 0;
     }
     return 1;

@@ -14,7 +14,9 @@ typedef struct
     float complex sums[FFTCP_FM];
     float complex fftin[FFT_FM];
     float complex fftout[FFT_FM];
-    float shape[FFTCP_FM];
+    float *shape;
+    float shape_fm[FFTCP_FM];
+    float shape_am[FFTCP_AM];
     fftwf_plan fft_plan_fm;
     fftwf_plan fft_plan_am;
 
@@ -23,6 +25,7 @@ typedef struct
     float complex phase;
     int cfo;
 
+    int mode;
     int fft;
     int fftcp;
     int cp;
@@ -32,5 +35,6 @@ void acquire_process(acquire_t *st);
 void acquire_cfo_adjust(acquire_t *st, int cfo);
 unsigned int acquire_push(acquire_t *st, cint16_t *buf, unsigned int length);
 void acquire_reset(acquire_t *st);
-void acquire_init(acquire_t *st, struct input_t *input, int mode);
+void acquire_init(acquire_t *st, struct input_t *input);
+void acquire_set_mode(acquire_t *st, int mode);
 void acquire_free(acquire_t *st);

@@ -53,6 +53,7 @@ typedef struct input_t
 } input_t;
 
 void input_init(input_t *st, nrsc5_t *radio, output_t *output);
+void input_set_mode(input_t *st);
 void input_reset(input_t *st);
 void input_free(input_t *st);
 void input_set_sync_state(input_t *st, unsigned int new_state);

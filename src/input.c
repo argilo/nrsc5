@@ -250,11 +250,17 @@ void input_init(input_t *st, nrsc5_t *radio, output_t *output)
         st->decim[i] = firdecim_q15_create(decim_taps, sizeof(decim_taps) / sizeof(decim_taps[0]));
     st->snr_fft = fftwf_plan_dft_1d(SNR_FFT_LEN, st->snr_fft_in, st->snr_fft_out, FFTW_FORWARD, 0);
 
-    acquire_init(&st->acq, st, NRSC5_MODE_AM);
+    acquire_init(&st->acq, st);
     decode_init(&st->decode, st);
     frame_init(&st->frame, st);
     sync_init(&st->sync, st);
 
+    input_reset(st);
+}
+
+void input_set_mode(input_t *st)
+{
+    acquire_set_mode(&st->acq, st->radio->mode);
     input_reset(st);
 }
 

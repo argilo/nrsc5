@@ -119,8 +119,8 @@ void acquire_process(acquire_t *st)
         cint16_t y;
         for (i = 0; i < st->fftcp * (ACQUIRE_SYMBOLS + 1); i++)
         {
-            fir_q15_execute((st->input->radio->mode == NRSC5_MODE_FM) ? st->filter_fm : st->filter_am, &st->in_buffer[i], &y);
-            st->buffer[i] = (st->input->radio->mode == NRSC5_MODE_FM) ? cq15_to_cf_conj(y) : cq15_to_cf(y);
+            fir_q15_execute((st->mode == NRSC5_MODE_FM) ? st->filter_fm : st->filter_am, &st->in_buffer[i], &y);
+            st->buffer[i] = (st->mode == NRSC5_MODE_FM) ? cq15_to_cf_conj(y) : cq15_to_cf(y);
         }
 
         memset(st->sums, 0, sizeof(float complex) * st->fftcp);
@@ -155,7 +155,7 @@ void acquire_process(acquire_t *st)
     }
 
     for (i = 0; i < st->fftcp * (ACQUIRE_SYMBOLS + 1); i++)
-        st->buffer[i] = (st->input->radio->mode == NRSC5_MODE_FM) ? cq15_to_cf_conj(st->in_buffer[i]) : cq15_to_cf(st->in_buffer[i]);
+        st->buffer[i] = (st->mode == NRSC5_MODE_FM) ? cq15_to_cf_conj(st->in_buffer[i]) : cq15_to_cf(st->in_buffer[i]);
 
     sync_adjust(&st->input->sync, st->fftcp / 2 - samperr);
     angle -= 2 * M_PI * st->cfo;
@@ -190,22 +190,22 @@ void acquire_process(acquire_t *st)
 
     for (i = 0; i < ACQUIRE_SYMBOLS; ++i)
     {
-        int j;
-        for (j = 0; j < st->fftcp; ++j)
+        int offset = (st->mode == NRSC5_MODE_FM) ? 0 : (FFT_AM - CP_AM) / 2;
+        for (int j = 0; j < st->fftcp; ++j)
         {
             float complex sample = st->phase * st->buffer[i * st->fftcp + j + samperr];
             if (j < st->cp)
-                st->fftin[(j + 128 - 7) % st->fft] = st->shape[j] * sample; // TODO: remove -7 for FM
+                st->fftin[(j + offset) % st->fft] = st->shape[j] * sample;
             else if (j < st->fft)
-                st->fftin[(j + 128 - 7) % st->fft] = sample;
+                st->fftin[(j + offset) % st->fft] = sample;
             else
-                st->fftin[(j + 128 - 7) % st->fft] += st->shape[j] * sample;
+                st->fftin[(j + offset) % st->fft] += st->shape[j] * sample;
 
             st->phase *= phase_increment;
         }
         st->phase /= cabsf(st->phase);
 
-        fftwf_execute((st->input->radio->mode == NRSC5_MODE_FM) ? st->fft_plan_fm : st->fft_plan_am);
+        fftwf_execute((st->mode == NRSC5_MODE_FM) ? st->fft_plan_fm : st->fft_plan_am);
         fftshift(st->fftout, st->fft);
         sync_push(&st->input->sync, st->fftout);
     }
@@ -251,13 +251,14 @@ void acquire_reset(acquire_t *st)
     st->cfo = 0;
 }
 
-void acquire_init(acquire_t *st, input_t *input, int mode)
+void acquire_init(acquire_t *st, input_t *input)
 {
     int i;
 
-    st->fft = (mode == NRSC5_MODE_FM ? FFT_FM : FFT_AM);
-    st->fftcp = (mode == NRSC5_MODE_FM ? FFTCP_FM : FFTCP_AM);
-    st->cp = (mode == NRSC5_MODE_FM ? CP_FM : CP_AM);
+    st->mode = NRSC5_MODE_FM;
+    st->fft = FFT_FM;
+    st->fftcp = FFTCP_FM;
+    st->cp = CP_FM;
 
     st->input = input;
 
@@ -267,18 +268,40 @@ void acquire_init(acquire_t *st, input_t *input, int mode)
     st->fft_plan_fm = fftwf_plan_dft_1d(FFT_FM, st->fftin, st->fftout, FFTW_FORWARD, 0);
     st->fft_plan_am = fftwf_plan_dft_1d(FFT_AM, st->fftin, st->fftout, FFTW_FORWARD, 0);
 
-    for (i = 0; i < st->fftcp; ++i)
+    for (i = 0; i < FFTCP_FM; ++i)
     {
-        // Pulse shaping window function
-        if (i < st->cp)
-            st->shape[i] = sinf(M_PI / 2 * i / st->cp);
-        else if (i < st->fft)
-            st->shape[i] = 1;
+        // Pulse shaping window function for FM
+        if (i < CP_FM)
+            st->shape_fm[i] = sinf(M_PI / 2 * i / CP_FM);
+        else if (i < FFT_FM)
+            st->shape_fm[i] = 1;
         else
-            st->shape[i] = cosf(M_PI / 2 * (i - st->fft) / st->cp);
+            st->shape_fm[i] = cosf(M_PI / 2 * (i - FFT_FM) / CP_FM);
     }
 
+    for (i = 0; i < FFTCP_AM; ++i)
+    {
+        // Pulse shaping window function for AM
+        if (i < CP_AM)
+            st->shape_am[i] = sinf(M_PI / 2 * i / CP_AM);
+        else if (i < FFT_AM)
+            st->shape_am[i] = 1;
+        else
+            st->shape_am[i] = cosf(M_PI / 2 * (i - FFT_AM) / CP_AM);
+    }
+
+    st->shape = st->shape_fm;
+
     acquire_reset(st);
+}
+
+void acquire_set_mode(acquire_t *st, int mode)
+{
+    st->mode = mode;
+    st->fft = (st->mode == NRSC5_MODE_FM) ? FFT_FM : FFT_AM;
+    st->fftcp = (st->mode == NRSC5_MODE_FM) ? FFTCP_FM : FFTCP_AM;
+    st->cp = (st->mode == NRSC5_MODE_FM) ? CP_FM : CP_AM;
+    st->shape = (st->mode == NRSC5_MODE_FM) ? st->shape_fm : st->shape_am;
 }
 
 void acquire_free(acquire_t *st)
