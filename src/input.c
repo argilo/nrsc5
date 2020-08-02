@@ -168,10 +168,10 @@ void input_push_cu8(input_t *st, uint8_t *buf, uint32_t len)
     {
         cint16_t x[2];
 
-        x[0].r = U8_Q15(buf[i]) >> 4;
-        x[0].i = U8_Q15(buf[i + 1]) >> 4;
-        x[1].r = U8_Q15(buf[i + 2]) >> 4;
-        x[1].i = U8_Q15(buf[i + 3]) >> 4; // TODO: change halfband filter gain to 1?
+        x[0].r = U8_Q15(buf[i]);
+        x[0].i = U8_Q15(buf[i + 1]);
+        x[1].r = U8_Q15(buf[i + 2]);
+        x[1].i = U8_Q15(buf[i + 3]);
 
         if (st->radio->mode == NRSC5_MODE_FM)
         {
@@ -179,6 +179,11 @@ void input_push_cu8(input_t *st, uint8_t *buf, uint32_t len)
         }
         else
         {
+            x[0].r >>= 4;
+            x[0].i >>= 4;
+            x[1].r >>= 4;
+            x[1].i >>= 4;
+
             halfband_q15_execute(st->decim[0], x, &st->stages[0][st->offset & 1]);
             if ((st->offset & 0x1) == 0x1) {
                 halfband_q15_execute(st->decim[1], st->stages[0], &st->stages[1][(st->offset >> 1) & 1]);
