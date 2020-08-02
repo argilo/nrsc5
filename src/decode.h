@@ -20,6 +20,7 @@ typedef struct
     uint8_t buffer_s[25 * BLKSZ * 8];
     uint8_t buffer_t[25 * BLKSZ * 8];
     unsigned int idx_pu_pl_s_t;
+    unsigned int am_diversity_wait;
 
     uint8_t bl[18000];
     uint8_t bu[18000];

@@ -317,6 +317,13 @@ void decode_process_p1_p3_am(decode_t *st)
     int total_errors = 0;
 
     interleaver_ma1(st);
+
+    if (st->am_diversity_wait > 0)
+    {
+        st->am_diversity_wait--;
+        return;
+    }
+
     for (int block = 0; block < 8; block++)
     {
         nrsc5_conv_decode_e1(st->viterbi_p1_am + (block * 11250), st->scrambler_p1_am, P1_FRAME_LEN_AM);
@@ -336,6 +343,8 @@ void decode_reset(decode_t *st)
 {
     st->idx_pm = 0;
     st->idx_px1 = 0;
+    st->idx_pu_pl_s_t = 0;
+    st->am_diversity_wait = 3;
     st->i_p3 = 0;
     st->ready_p3 = 0;
     memset(st->pt_p3, 0, sizeof(unsigned int) * 4);
