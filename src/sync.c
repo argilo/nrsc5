@@ -182,17 +182,26 @@ static int find_ref(sync_t *st, unsigned int ref, unsigned int rsid)
     return fuzzy_match(needle, sizeof(needle), data, BLKSZ);
 }
 
-static int find_first_block_am(sync_t *st, unsigned int ref)
+static int find_block_am(sync_t *st, unsigned int ref)
 {
     signed char needle[] = {
-        0, 1, 1, 0, 0, 1, 0, -1, -1, 1, -1, -1, -1, -1, 0, -1, -1, 0, 0, 0, -1, 1, 1
+        0, 1, 1, 0, 0, 1, 0, -1, -1, 1, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1, -1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1
     };
     unsigned char data[BLKSZ];
 
     for (int n = 0; n < BLKSZ; n++)
+    {
         data[n] = cimagf(st->buffer[ref][n]) <= 0 ? 0 : 1;
+        if ((needle[n] >= 0) && (data[n] != needle[n])) return -1;
+    }
 
-    return fuzzy_match(needle, sizeof(needle), data, BLKSZ);
+    // parity checks
+    if (data[7] ^ data[8]) return -1;
+    if (data[10] ^ data[11] ^ data[12] ^ data[13]) return -1;
+    if (data[15] ^ data[16] ^ data[17] ^ data[18] ^ data[19] ^ data[20]) return -1;
+    if (data[23] ^ data[24] ^ data[25] ^ data[26] ^ data[27] ^ data[28] ^ data[29] ^ data[30] ^ data[31]) return -1;
+
+    return (data[17] << 2) | (data[18] << 1) | data[19];
 }
 
 static int find_ref_am(sync_t *st, unsigned int ref)
@@ -484,7 +493,6 @@ void sync_process_fm(sync_t *st)
 void sync_process_am(sync_t *st)
 {
     int offset;
-    static int synced = 0;
 
     for (int i = 1; i <= 53; i++)
     {
@@ -502,7 +510,7 @@ void sync_process_am(sync_t *st)
         }
     }
 
-    if (synced == 0 && st->cfo_wait == 0)
+    if (st->input->sync_state == SYNC_STATE_COARSE && st->cfo_wait == 0)
     {
         offset = find_ref_am(st, 128+1);
         if (offset > 0)
@@ -517,19 +525,26 @@ void sync_process_am(sync_t *st)
         st->cfo_wait--;
     }
 
-    if (synced == 0)
+    if (st->input->sync_state == SYNC_STATE_COARSE)
     {
-        offset = find_first_block_am(st, 128+1);
-        if (offset == 0)
+        int bc = find_block_am(st, 128+1);
+
+        if (bc == -1)
+            st->offset_history = 0;
+        else
+            st->offset_history = (st->offset_history << 4) | bc;
+
+        if ((st->offset_history & 0xffff) == 0x5670)
         {
             log_debug("Sync!");
-            synced = 1;
+            st->input->sync_state = SYNC_STATE_FINE;
             decode_reset(&st->input->decode);
             frame_reset(&st->input->frame);
+            st->offset_history = 0;
         }
     }
 
-    if (synced == 1)
+    if (st->input->sync_state == SYNC_STATE_FINE)
     {
         float complex pids1_mult = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+27][8] + st->buffer[128+27][24]);
         float complex pids2_mult = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+53][8] + st->buffer[128+53][24]);
@@ -548,6 +563,7 @@ void sync_process_am(sync_t *st)
         float complex s_mult[25];
         float complex t_mult[25];
 
+        float samperr = 0;
         for (int col = 0; col < 25; col++)
         {
             int train1 = (5 + 11*col) % 32;
@@ -557,7 +573,15 @@ void sync_process_am(sync_t *st)
             pu_mult[col] = 2 * CMPLXF(2.5, -2.5) / (st->buffer[128+57+col][train1] + st->buffer[128+57+col][train2]);
             s_mult[col] = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+28+col][train1] + st->buffer[128+28+col][train2]);
             t_mult[col] = 2 * CMPLXF(-0.5, 0.5) / (st->buffer[128+2+col][train1] + st->buffer[128+2+col][train2]);
+
+            if (col > 0)
+            {
+                samperr += phase_diff(cargf(pl_mult[col]), cargf(pl_mult[col-1]));
+                samperr += phase_diff(cargf(pu_mult[col]), cargf(pu_mult[col-1]));
+            }
         }
+        samperr = samperr / 48 * FFT_AM / (2 * M_PI);
+        st->samperr = roundf(samperr);
 
         for (int n = 0; n < BLKSZ; n++)
         {
@@ -633,6 +657,7 @@ void sync_reset(sync_t *st)
     st->idx = 0;
     st->psmi = 1;
     st->cfo_wait = 0;
+    st->offset_history = 0;
     st->mer_cnt = 0;
     st->error_lb = 0;
     st->error_ub = 0;
