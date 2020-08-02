@@ -1,24 +1,25 @@
-From 176e496b2a5461af122e20054079887b0b3d46a8 Mon Sep 17 00:00:00 2001
-From: Andrew Wesie <awesie@gmail.com>
-Date: Wed, 14 Jun 2017 03:14:18 -0500
+From 2b4fb7737710a49982276cc638e9e8f6e77b3a4c Mon Sep 17 00:00:00 2001
+From: Clayton Smith <argilo@gmail.com>
+Date: Sun, 2 Aug 2020 18:48:45 -0400
 Subject: [PATCH] Support for HDC variant
 
 ---
- configure.in         |   7 ++
+ configure.in         |   9 ++
  frontend/main.c      |   3 +-
  include/neaacdec.h   |   4 +
  libfaad/bits.c       |   2 +-
  libfaad/bits.h       |   2 +-
- libfaad/common.c     |   5 ++
- libfaad/decoder.c    |  42 +++++++++++
+ libfaad/common.c     |   5 +
+ libfaad/decoder.c    |  42 +++++++++
+ libfaad/sbr_dec.c    |   2 +-
  libfaad/sbr_dec.h    |   4 +
- libfaad/sbr_syntax.c |  12 +++
- libfaad/syntax.c     | 208 +++++++++++++++++++++++++++++++++++++++++++++++++--
+ libfaad/sbr_syntax.c |  16 +++-
+ libfaad/syntax.c     | 216 +++++++++++++++++++++++++++++++++++++++++--
  libfaad/syntax.h     |   1 +
- 11 files changed, 279 insertions(+), 11 deletions(-)
+ 12 files changed, 292 insertions(+), 14 deletions(-)
 
 diff --git a/configure.in b/configure.in
-index 740b056..d0b9035 100644
+index 740b056..6a53d11 100644
 --- a/configure.in
 +++ b/configure.in
 @@ -33,6 +33,9 @@ AC_ARG_WITH(xmms,[  --with-xmms             compile XMMS-1 plugin],
@@ -110,18 +111,18 @@ diff --git a/libfaad/common.c b/libfaad/common.c
 index be08d35..49b084c 100644
 --- a/libfaad/common.c
 +++ b/libfaad/common.c
-@@ -167,6 +167,11 @@ int8_t can_decode_ot(const uint8_t object_type)
+@@ -166,6 +166,11 @@ int8_t can_decode_ot(const uint8_t object_type)
+ #else
          return -1;
  #endif
- #endif
++#endif
 +
 +#ifdef HDC
 +    case HDC_LC:
 +        return 0;
-+#endif
+ #endif
      }
  
-     return -1;
 diff --git a/libfaad/decoder.c b/libfaad/decoder.c
 index 85dd423..afbe760 100644
 --- a/libfaad/decoder.c
@@ -211,29 +212,29 @@ index 40c1d53..5693c6b 100644
      uint8_t numTimeSlots;
      uint8_t tHFGen;
 diff --git a/libfaad/sbr_syntax.c b/libfaad/sbr_syntax.c
-index 6c9b97c..643596f 100644
+index 6c9b97c..0ec7afe 100644
 --- a/libfaad/sbr_syntax.c
 +++ b/libfaad/sbr_syntax.c
-@@ -155,6 +155,9 @@ uint8_t sbr_extension_data(bitfile *ld, sbr_info *sbr, uint16_t cnt,
+@@ -154,6 +154,9 @@ uint8_t sbr_extension_data(bitfile *ld, sbr_info *sbr, uint16_t cnt,
+ 
  #ifdef DRM
      if (!sbr->Is_DRM_SBR)
- #endif
++#endif
 +#ifdef HDC
 +    if (!sbr->Is_HDC_SBR)
-+#endif
+ #endif
      {
          uint8_t bs_extension_type = (uint8_t)faad_getbits(ld, 4
-             DEBUGVAR(1,198,"sbr_bitstream(): bs_extension_type"));
-@@ -248,6 +251,9 @@ uint8_t sbr_extension_data(bitfile *ld, sbr_info *sbr, uint16_t cnt,
+@@ -247,6 +250,9 @@ uint8_t sbr_extension_data(bitfile *ld, sbr_info *sbr, uint16_t cnt,
+ 
  #ifdef DRM
      if (!sbr->Is_DRM_SBR)
- #endif
++#endif
 +#ifdef HDC
 +    if (!sbr->Is_HDC_SBR)
-+#endif
+ #endif
      {       
          /* -4 does not apply, bs_extension_type is re-read in this function */
-         num_align_bits = 8*cnt /*- 4*/ - num_sbr_bits2;
 @@ -391,6 +397,12 @@ static uint8_t sbr_single_channel_element(bitfile *ld, sbr_info *sbr)
          faad_get1bit(ld);
      }
@@ -258,9 +259,9 @@ index 6c9b97c..643596f 100644
 +        return num_bits_left;
      }
  }
-
+ 
 diff --git a/libfaad/syntax.c b/libfaad/syntax.c
-index f8e808c..cafe01e 100644
+index f8e808c..16006a8 100644
 --- a/libfaad/syntax.c
 +++ b/libfaad/syntax.c
 @@ -88,7 +88,7 @@ static uint8_t spectral_data(NeAACDecStruct *hDecoder, ic_stream *ics, bitfile *
@@ -547,7 +548,7 @@ index f8e808c..cafe01e 100644
          } else {
  #endif
  #ifndef DRM
-@@ -1286,12 +1464,12 @@ void DRM_aac_scalable_main_element(NeAACDecStruct *hDecoder, NeAACDecFrameInfo *
+@@ -1286,12 +1472,12 @@ void DRM_aac_scalable_main_element(NeAACDecStruct *hDecoder, NeAACDecFrameInfo *
      }
      /* Stereo4 / Mono2 */
      if (ics1->tns_data_present)
@@ -562,7 +563,7 @@ index f8e808c..cafe01e 100644
      }
  
  #ifdef DRM
-@@ -1504,6 +1682,9 @@ static uint8_t side_info(NeAACDecStruct *hDecoder, element *ele,
+@@ -1504,6 +1690,9 @@ static uint8_t side_info(NeAACDecStruct *hDecoder, element *ele,
      ics->global_gain = (uint8_t)faad_getbits(ld, 8
          DEBUGVAR(1,67,"individual_channel_stream(): global_gain"));
  
@@ -572,7 +573,7 @@ index f8e808c..cafe01e 100644
      if (!ele->common_window && !scal_flag)
      {
          if ((result = ics_info(hDecoder, ics, ld, ele->common_window)) > 0)
-@@ -1516,6 +1697,9 @@ static uint8_t side_info(NeAACDecStruct *hDecoder, element *ele,
+@@ -1516,6 +1705,9 @@ static uint8_t side_info(NeAACDecStruct *hDecoder, element *ele,
      if ((result = scale_factor_data(hDecoder, ics, ld)) > 0)
          return result;
  
@@ -582,7 +583,7 @@ index f8e808c..cafe01e 100644
      if (!scal_flag)
      {
          /**
-@@ -1538,7 +1722,7 @@ static uint8_t side_info(NeAACDecStruct *hDecoder, element *ele,
+@@ -1538,7 +1730,7 @@ static uint8_t side_info(NeAACDecStruct *hDecoder, element *ele,
  #ifdef ERROR_RESILIENCE
              if (hDecoder->object_type < ER_OBJECT_START)
  #endif
@@ -591,7 +592,7 @@ index f8e808c..cafe01e 100644
          }
  
          /* get gain control data */
-@@ -1599,10 +1783,13 @@ static uint8_t individual_channel_stream(NeAACDecStruct *hDecoder, element *ele,
+@@ -1599,10 +1791,13 @@ static uint8_t individual_channel_stream(NeAACDecStruct *hDecoder, element *ele,
      if (result > 0)
          return result;
  
@@ -606,7 +607,7 @@ index f8e808c..cafe01e 100644
      }
  
  #ifdef DRM
-@@ -1927,7 +2114,7 @@ static uint8_t scale_factor_data(NeAACDecStruct *hDecoder, ic_stream *ics, bitfi
+@@ -1927,7 +2122,7 @@ static uint8_t scale_factor_data(NeAACDecStruct *hDecoder, ic_stream *ics, bitfi
  }
  
  /* Table 4.4.27 */
@@ -615,7 +616,7 @@ index f8e808c..cafe01e 100644
  {
      uint8_t w, filt, i, start_coef_bits, coef_bits;
      uint8_t n_filt_bits = 2;
-@@ -1943,6 +2130,11 @@ static void tns_data(ic_stream *ics, tns_info *tns, bitfile *ld)
+@@ -1943,6 +2138,11 @@ static void tns_data(ic_stream *ics, tns_info *tns, bitfile *ld)
  
      for (w = 0; w < ics->num_windows; w++)
      {
@@ -640,5 +641,5 @@ index 2a1fc6d..5361b2b 100644
  /* header types */
  #define RAW        0
 -- 
-2.13.1
+2.25.1
 
