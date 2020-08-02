@@ -484,7 +484,7 @@ void frame_process(frame_t *st, size_t length)
         if (!fix_header(st, st->buffer + offset))
         {
             // go back to coarse sync if we fail to decode any audio packets in a P1 frame
-            if (length == MAX_PDU_LEN && offset == 0)
+            if ((length == MAX_PDU_LEN || length == 466) && offset == 0)
                 input_set_sync_state(st->input, SYNC_STATE_NONE);
             return;
         }
