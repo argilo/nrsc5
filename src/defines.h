@@ -48,6 +48,8 @@
 #define MAX_PDU_LEN ((P1_FRAME_LEN_FM - PCI_LEN) / 8)
 // number of programs (max)
 #define MAX_PROGRAMS 8
+// number of streams per program (max)
+#define MAX_STREAMS 4
 
 #define U8_F(x) ( (((float)(x)) - 127) / 128 )
 #define U8_Q15(x) ( ((int16_t)(x) - 127) * 64 )

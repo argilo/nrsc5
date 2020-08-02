@@ -57,9 +57,9 @@ static void input_push_to_acquire(input_t *st)
     st->used += acquire_push(&st->acq, &st->buffer[st->used], st->avail - st->used);
 }
 
-void input_pdu_push(input_t *st, uint8_t *pdu, unsigned int len, unsigned int program)
+void input_pdu_push(input_t *st, uint8_t *pdu, unsigned int len, unsigned int program, unsigned int stream_id)
 {
-    output_push(st->output, pdu, len, program);
+    output_push(st->output, pdu, len, program, stream_id);
 }
 
 void input_set_skip(input_t *st, unsigned int skip)

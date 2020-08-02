@@ -524,10 +524,11 @@ void frame_process(frame_t *st, size_t length)
 
             if (j == 0 && hdr.pfirst)
             {
-                if (st->pdu_idx[prog])
+                unsigned int idx = st->pdu_idx[prog][hdr.stream_id];
+                if (idx)
                 {
-                    memcpy(&st->pdu[prog][st->pdu_idx[prog]], st->buffer + offset, cnt);
-                    input_pdu_push(st->input, st->pdu[prog], cnt + st->pdu_idx[prog], prog);
+                    memcpy(&st->pdu[prog][idx], st->buffer + offset, cnt);
+                    input_pdu_push(st->input, st->pdu[prog], cnt + idx, prog, hdr.stream_id);
                 }
                 else
                 {
@@ -537,11 +538,11 @@ void frame_process(frame_t *st, size_t length)
             else if (j == hdr.nop - 1 && hdr.plast)
             {
                 memcpy(st->pdu[prog], st->buffer + offset, cnt);
-                st->pdu_idx[prog] = cnt;
+                st->pdu_idx[prog][hdr.stream_id] = cnt;
             }
             else
             {
-                input_pdu_push(st->input, st->buffer + offset, cnt, prog);
+                input_pdu_push(st->input, st->buffer + offset, cnt, prog, hdr.stream_id);
             }
 
             offset += cnt + 1;
@@ -612,13 +613,14 @@ void frame_push(frame_t *st, uint8_t *bits, size_t length)
 
 void frame_reset(frame_t *st)
 {
-    unsigned int i;
-
     st->pci = 0;
-    for (i = 0; i < MAX_PROGRAMS; i++)
+    for (int prog = 0; prog < MAX_PROGRAMS; prog++)
     {
-        st->pdu_idx[i] = 0;
-        st->psd_idx[i] = -1;
+        for (int stream_id = 0; stream_id < MAX_STREAMS; stream_id++)
+        {
+            st->pdu_idx[prog][stream_id] = 0;
+        }
+        st->psd_idx[prog] = -1;
     }
 
     st->fixed_ready = 0;

@@ -26,7 +26,7 @@
 #include "private.h"
 #include "unicode.h"
 
-void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int program)
+void output_push(output_t *st, uint8_t *pkt, unsigned int len, unsigned int program, unsigned int stream_id)
 {
     nrsc5_report_hdc(st->radio, program, pkt, len);
 
