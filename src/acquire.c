@@ -164,29 +164,34 @@ void acquire_process(acquire_t *st)
 
     if (st->mode == NRSC5_MODE_AM)
     {
-        float complex full_sum, symbol_sum, last_symbol_sum, angle_error;
+        float sum_y = 0, sum_xy = 0, sum_x2 = 0;
         float complex temp_phase = st->phase;
-        full_sum = 0;
-        angle_error = 0;
         for (i = 0; i < ACQUIRE_SYMBOLS; ++i)
         {
-            int j;
-            symbol_sum = 0;
-            for (j = 0; j < st->fftcp; ++j)
+            int offset = (st->mode == NRSC5_MODE_FM) ? 0 : (FFT_AM - CP_AM) / 2;
+            for (int j = 0; j < st->fftcp; ++j)
             {
                 float complex sample = temp_phase * st->buffer[i * st->fftcp + j + samperr];
-                full_sum += sample;
-                symbol_sum += sample;
+                if (j < st->cp)
+                    st->fftin[(j + offset) % st->fft] = st->shape[j] * sample;
+                else if (j < st->fft)
+                    st->fftin[(j + offset) % st->fft] = sample;
+                else
+                    st->fftin[(j + offset) % st->fft] += st->shape[j] * sample;
+
                 temp_phase *= phase_increment;
             }
-            if (i > 0) {
-                angle_error += (symbol_sum / last_symbol_sum);
-            }
             temp_phase /= cabsf(temp_phase);
-            last_symbol_sum = symbol_sum;
+
+            fftwf_execute((st->mode == NRSC5_MODE_FM) ? st->fft_plan_fm : st->fft_plan_am);
+            fftshift(st->fftout, st->fft);
+            float x = st->fftcp * (i - (float) (ACQUIRE_SYMBOLS - 1) / 2);
+            sum_y += cargf(st->fftout[128]);
+            sum_xy += x * cargf(st->fftout[128]);
+            sum_x2 += x * x;
         }
-        phase_increment *= cexpf((-cargf(angle_error) / st->fftcp) * I);
-        st->phase *= cexpf(-(cargf(full_sum) - cargf(angle_error) * ACQUIRE_SYMBOLS / 2)*I);
+        phase_increment *= cexpf(-sum_xy / sum_x2 * I);
+        st->phase *= cexpf((-sum_y / ACQUIRE_SYMBOLS + (sum_xy / sum_x2)*(ACQUIRE_SYMBOLS)*st->fftcp/2 - 0.06) * I);
     }
 
     for (i = 0; i < ACQUIRE_SYMBOLS; ++i)
