@@ -527,8 +527,8 @@ void frame_process(frame_t *st, size_t length)
                 unsigned int idx = st->pdu_idx[prog][hdr.stream_id];
                 if (idx)
                 {
-                    memcpy(&st->pdu[prog][idx], st->buffer + offset, cnt);
-                    input_pdu_push(st->input, st->pdu[prog], cnt + idx, prog, hdr.stream_id);
+                    memcpy(&st->pdu[prog][hdr.stream_id][idx], st->buffer + offset, cnt);
+                    input_pdu_push(st->input, st->pdu[prog][hdr.stream_id], cnt + idx, prog, hdr.stream_id);
                 }
                 else
                 {
@@ -537,7 +537,7 @@ void frame_process(frame_t *st, size_t length)
             }
             else if (j == hdr.nop - 1 && hdr.plast)
             {
-                memcpy(st->pdu[prog], st->buffer + offset, cnt);
+                memcpy(st->pdu[prog][hdr.stream_id], st->buffer + offset, cnt);
                 st->pdu_idx[prog][hdr.stream_id] = cnt;
             }
             else

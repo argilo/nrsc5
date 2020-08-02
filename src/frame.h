@@ -20,7 +20,7 @@ typedef struct
 {
     struct input_t *input;
     uint8_t buffer[MAX_PDU_LEN];
-    uint8_t pdu[MAX_PROGRAMS][0x10000];
+    uint8_t pdu[MAX_PROGRAMS][MAX_STREAMS][0x10000];
     unsigned int pdu_idx[MAX_PROGRAMS][MAX_STREAMS];
     unsigned int pci;
     unsigned int program;
