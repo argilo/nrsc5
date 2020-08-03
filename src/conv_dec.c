@@ -32,12 +32,11 @@
 #include "defines.h"
 #include "conv.h"
 
+#include "conv_gen.h"
 #if defined(HAVE_SSE3)
 #include "conv_sse.h"
 #elif defined(HAVE_NEON)
 #include "conv_neon.h"
-#else
-#include "conv_gen.h"
 #endif
 
 #define PARITY(X) __builtin_parity(X)
