@@ -164,8 +164,11 @@ void acquire_process(acquire_t *st)
 
     if (st->mode == NRSC5_MODE_AM)
     {
-        float sum_y = 0, sum_xy = 0, sum_x2 = 0;
+        float y, sum_y = 0, sum_xy = 0, sum_x2 = 0;
+        float complex last_carrier;
         float complex temp_phase = st->phase;
+        float mag_sums[FFT_AM] = {0};
+
         for (i = 0; i < ACQUIRE_SYMBOLS; ++i)
         {
             int offset = (st->mode == NRSC5_MODE_FM) ? 0 : (FFT_AM - CP_AM) / 2;
@@ -185,11 +188,42 @@ void acquire_process(acquire_t *st)
 
             fftwf_execute((st->mode == NRSC5_MODE_FM) ? st->fft_plan_fm : st->fft_plan_am);
             fftshift(st->fftout, st->fft);
+
             float x = st->fftcp * (i - (float) (ACQUIRE_SYMBOLS - 1) / 2);
-            sum_y += cargf(st->fftout[128]);
-            sum_xy += x * cargf(st->fftout[128]);
+            if (i == 0)
+                y = cargf(st->fftout[128]);
+            else
+                y += cargf(st->fftout[128] / last_carrier);
+            last_carrier = st->fftout[128];
+
+            sum_y += y;
+            sum_xy += x * y;
             sum_x2 += x * x;
+
+            if (st->input->sync_state != SYNC_STATE_FINE)
+            {
+                for (int j = 128-53; j <= 128+53; j++)
+                {
+                    mag_sums[j] += cabsf(st->fftout[j]);
+                }
+            }
         }
+
+        if (st->input->sync_state != SYNC_STATE_FINE)
+        {
+            float max_mag = -1.0f;
+            int max_index = -1;
+            for (int j = 128-53; j <= 128+53; j++)
+            {
+                if (mag_sums[j] > max_mag)
+                {
+                    max_mag = mag_sums[j];
+                    max_index = j;
+                }
+            }
+            acquire_cfo_adjust(st, max_index - 128);
+        }
+
         phase_increment *= cexpf(-sum_xy / sum_x2 * I);
         st->phase *= cexpf((-sum_y / ACQUIRE_SYMBOLS + (sum_xy / sum_x2)*(ACQUIRE_SYMBOLS)*st->fftcp/2 - 0.06) * I);
     }
@@ -229,7 +263,8 @@ void acquire_cfo_adjust(acquire_t *st, int cfo)
         return;
 
     st->cfo += cfo;
-    hz = (float) st->cfo * SAMPLE_RATE / 2 / st->fft; // TODO: does this need to accomodate AM?
+    hz = (float) st->cfo * SAMPLE_RATE / st->fft;
+    hz /= (st->mode == NRSC5_MODE_FM ? 2 : 32);
 
     log_info("CFO: %f Hz", hz);
 }
