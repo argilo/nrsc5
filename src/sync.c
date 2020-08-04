@@ -494,25 +494,25 @@ void sync_process_am(sync_t *st)
 {
     int offset;
 
-    for (int i = 1; i <= 53; i++)
+    for (int i = REF_INDEX_AM; i <= PIDS_2_INDEX_AM; i++)
     {
         for (int n = 0; n < BLKSZ; n++)
         {
-            st->buffer[128+i][n] -= conjf(st->buffer[128-i][n]);
+            st->buffer[CENTER_AM + i][n] -= conjf(st->buffer[CENTER_AM - i][n]);
         }
     }
 
-    for (int i = 57; i <= 81; i++)
+    for (int i = PRIMARY_INDEX_AM; i <= MAX_INDEX_AM; i++)
     {
         for (int n = 0; n < BLKSZ; n++)
         {
-            st->buffer[128-i][n] = -conjf(st->buffer[128-i][n]);
+            st->buffer[CENTER_AM - i][n] = -conjf(st->buffer[CENTER_AM - i][n]);
         }
     }
 
     if (st->input->sync_state == SYNC_STATE_COARSE && st->cfo_wait == 0)
     {
-        offset = find_ref_am(st, 128+1);
+        offset = find_ref_am(st, CENTER_AM + REF_INDEX_AM);
         if (offset > 0)
         {
             input_set_skip(st->input, offset * FFTCP_AM);
@@ -527,7 +527,7 @@ void sync_process_am(sync_t *st)
 
     if (st->input->sync_state == SYNC_STATE_COARSE)
     {
-        int bc = find_block_am(st, 128+1);
+        int bc = find_block_am(st, CENTER_AM + REF_INDEX_AM);
 
         if (bc == -1)
             st->offset_history = 0;
@@ -546,16 +546,16 @@ void sync_process_am(sync_t *st)
 
     if (st->input->sync_state == SYNC_STATE_FINE)
     {
-        float complex pids1_mult = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+27][8] + st->buffer[128+27][24]);
-        float complex pids2_mult = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+53][8] + st->buffer[128+53][24]);
+        float complex pids1_mult = 2 * CMPLXF(1.5, -0.5) / (st->buffer[CENTER_AM + PIDS_1_INDEX_AM][8] + st->buffer[CENTER_AM + PIDS_1_INDEX_AM][24]);
+        float complex pids2_mult = 2 * CMPLXF(1.5, -0.5) / (st->buffer[CENTER_AM + PIDS_2_INDEX_AM][8] + st->buffer[CENTER_AM + PIDS_2_INDEX_AM][24]);
 
         for (int n = 0; n < BLKSZ; n++)
         {
-            st->buffer[128+27][n] *= pids1_mult;
-            decode_push_pids(&st->input->decode, qam16(st->buffer[128+27][n]));
+            st->buffer[CENTER_AM + PIDS_1_INDEX_AM][n] *= pids1_mult;
+            decode_push_pids(&st->input->decode, qam16(st->buffer[CENTER_AM + PIDS_1_INDEX_AM][n]));
 
-            st->buffer[128+53][n] *= pids2_mult;
-            decode_push_pids(&st->input->decode, qam16(st->buffer[128+53][n]));
+            st->buffer[CENTER_AM + PIDS_2_INDEX_AM][n] *= pids2_mult;
+            decode_push_pids(&st->input->decode, qam16(st->buffer[CENTER_AM + PIDS_2_INDEX_AM][n]));
         }
 
         float complex pl_mult[PARTITION_WIDTH_AM];
@@ -569,10 +569,10 @@ void sync_process_am(sync_t *st)
             int train1 = (5 + 11*col) % 32;
             int train2 = (21 + 11*col) % 32;
 
-            pl_mult[col] = 2 * CMPLXF(2.5, -2.5) / (st->buffer[128-57-col][train1] + st->buffer[128-57-col][train2]);
-            pu_mult[col] = 2 * CMPLXF(2.5, -2.5) / (st->buffer[128+57+col][train1] + st->buffer[128+57+col][train2]);
-            s_mult[col] = 2 * CMPLXF(1.5, -0.5) / (st->buffer[128+28+col][train1] + st->buffer[128+28+col][train2]);
-            t_mult[col] = 2 * CMPLXF(-0.5, 0.5) / (st->buffer[128+2+col][train1] + st->buffer[128+2+col][train2]);
+            pl_mult[col] = 2 * CMPLXF(2.5, -2.5) / (st->buffer[CENTER_AM - PRIMARY_INDEX_AM - col][train1] + st->buffer[CENTER_AM - PRIMARY_INDEX_AM - col][train2]);
+            pu_mult[col] = 2 * CMPLXF(2.5, -2.5) / (st->buffer[CENTER_AM + PRIMARY_INDEX_AM + col][train1] + st->buffer[CENTER_AM + PRIMARY_INDEX_AM + col][train2]);
+            s_mult[col] = 2 * CMPLXF(1.5, -0.5) / (st->buffer[CENTER_AM + SECONDARY_INDEX_AM + col][train1] + st->buffer[CENTER_AM + SECONDARY_INDEX_AM + col][train2]);
+            t_mult[col] = 2 * CMPLXF(-0.5, 0.5) / (st->buffer[CENTER_AM + TERTIARY_INDEX_AM + col][train1] + st->buffer[CENTER_AM + TERTIARY_INDEX_AM + col][train2]);
 
             if (col > 0)
             {
@@ -587,17 +587,17 @@ void sync_process_am(sync_t *st)
         {
             for (int col = 0; col < PARTITION_WIDTH_AM; col++)
             {
-                st->buffer[128-57-col][n] *= pl_mult[col];
-                st->buffer[128+57+col][n] *= pu_mult[col];
-                st->buffer[128+28+col][n] *= s_mult[col];
-                st->buffer[128+2+col][n] *= t_mult[col];
+                st->buffer[CENTER_AM - PRIMARY_INDEX_AM - col][n] *= pl_mult[col];
+                st->buffer[CENTER_AM + PRIMARY_INDEX_AM + col][n] *= pu_mult[col];
+                st->buffer[CENTER_AM + SECONDARY_INDEX_AM + col][n] *= s_mult[col];
+                st->buffer[CENTER_AM + TERTIARY_INDEX_AM + col][n] *= t_mult[col];
 
                 decode_push_pl_pu_s_t(
                     &st->input->decode,
-                    qam64(st->buffer[128-57-col][n]),
-                    qam64(st->buffer[128+57+col][n]),
-                    qam16(st->buffer[128+28+col][n]),
-                    qpsk(st->buffer[128+2+col][n])
+                    qam64(st->buffer[CENTER_AM - PRIMARY_INDEX_AM - col][n]),
+                    qam64(st->buffer[CENTER_AM + PRIMARY_INDEX_AM + col][n]),
+                    qam16(st->buffer[CENTER_AM + SECONDARY_INDEX_AM + col][n]),
+                    qpsk(st->buffer[CENTER_AM + TERTIARY_INDEX_AM + col][n])
                 );
             }
         }
@@ -628,7 +628,7 @@ void sync_push(sync_t *st, float complex *fftout)
     }
     else
     {
-        for (i = 128-81; i <= 128+81; i++)
+        for (i = CENTER_AM - MAX_INDEX_AM; i <= CENTER_AM + MAX_INDEX_AM; i++)
         {
             st->buffer[i][st->idx] = fftout[i];
         }

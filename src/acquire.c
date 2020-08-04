@@ -191,10 +191,10 @@ void acquire_process(acquire_t *st)
 
             float x = st->fftcp * (i - (float) (ACQUIRE_SYMBOLS - 1) / 2);
             if (i == 0)
-                y = cargf(st->fftout[128]);
+                y = cargf(st->fftout[CENTER_AM]);
             else
-                y += cargf(st->fftout[128] / last_carrier);
-            last_carrier = st->fftout[128];
+                y += cargf(st->fftout[CENTER_AM] / last_carrier);
+            last_carrier = st->fftout[CENTER_AM];
 
             sum_y += y;
             sum_xy += x * y;
@@ -202,7 +202,7 @@ void acquire_process(acquire_t *st)
 
             if (st->input->sync_state != SYNC_STATE_FINE)
             {
-                for (int j = 128-53; j <= 128+53; j++)
+                for (int j = CENTER_AM - PIDS_2_INDEX_AM; j <= CENTER_AM + PIDS_2_INDEX_AM; j++)
                 {
                     mag_sums[j] += cabsf(st->fftout[j]);
                 }
@@ -213,7 +213,7 @@ void acquire_process(acquire_t *st)
         {
             float max_mag = -1.0f;
             int max_index = -1;
-            for (int j = 128-53; j <= 128+53; j++)
+            for (int j = CENTER_AM - PIDS_2_INDEX_AM; j <= CENTER_AM + PIDS_2_INDEX_AM; j++)
             {
                 if (mag_sums[j] > max_mag)
                 {
@@ -221,7 +221,7 @@ void acquire_process(acquire_t *st)
                     max_index = j;
                 }
             }
-            acquire_cfo_adjust(st, max_index - 128);
+            acquire_cfo_adjust(st, max_index - CENTER_AM);
         }
 
         phase_increment *= cexpf(-sum_xy / sum_x2 * I);

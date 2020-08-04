@@ -28,6 +28,16 @@
 #define LB_START ((FFT_FM / 2) - 546)
 // index of last upper sideband subcarrier
 #define UB_END ((FFT_FM / 2) + 546)
+// index of AM carrier
+#define CENTER_AM (FFT_AM / 2)
+// indexes of AM subcarriers
+#define REF_INDEX_AM 1
+#define PIDS_1_INDEX_AM 27
+#define PIDS_2_INDEX_AM 53
+#define TERTIARY_INDEX_AM 2
+#define SECONDARY_INDEX_AM 28
+#define PRIMARY_INDEX_AM 57
+#define MAX_INDEX_AM 81
 // bits per P1 frame
 #define P1_FRAME_LEN_FM 146176
 #define P1_FRAME_LEN_AM 3750
