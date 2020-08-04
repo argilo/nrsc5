@@ -21,6 +21,8 @@
 #include "input.h"
 
 #define FILTER_DELAY 15
+#define DECIMATION_FACTOR_FM 2
+#define DECIMATION_FACTOR_AM 32
 
 static float filter_taps_fm[] = {
     -0.000685643230099231,
@@ -225,6 +227,7 @@ void acquire_process(acquire_t *st)
         }
 
         phase_increment *= cexpf(-sum_xy / sum_x2 * I);
+        // TODO: Investigate why 0.06 is needed below
         st->phase *= cexpf((-sum_y / ACQUIRE_SYMBOLS + (sum_xy / sum_x2)*(ACQUIRE_SYMBOLS)*st->fftcp/2 - 0.06) * I);
     }
 
@@ -264,7 +267,7 @@ void acquire_cfo_adjust(acquire_t *st, int cfo)
 
     st->cfo += cfo;
     hz = (float) st->cfo * SAMPLE_RATE / st->fft;
-    hz /= (st->mode == NRSC5_MODE_FM ? 2 : 32);
+    hz /= (st->mode == NRSC5_MODE_FM ? DECIMATION_FACTOR_FM : DECIMATION_FACTOR_AM);
 
     log_info("CFO: %f Hz", hz);
 }

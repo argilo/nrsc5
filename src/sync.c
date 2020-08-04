@@ -580,7 +580,7 @@ void sync_process_am(sync_t *st)
                 samperr += phase_diff(cargf(pu_mult[col]), cargf(pu_mult[col-1]));
             }
         }
-        samperr = samperr / 48 * FFT_AM / (2 * M_PI);
+        samperr = samperr / (2 * (PARTITION_WIDTH_AM-1)) * FFT_AM / (2 * M_PI);
         st->samperr = roundf(samperr);
 
         for (int n = 0; n < BLKSZ; n++)
