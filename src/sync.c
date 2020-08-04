@@ -558,13 +558,13 @@ void sync_process_am(sync_t *st)
             decode_push_pids(&st->input->decode, qam16(st->buffer[128+53][n]));
         }
 
-        float complex pl_mult[25];
-        float complex pu_mult[25];
-        float complex s_mult[25];
-        float complex t_mult[25];
+        float complex pl_mult[PARTITION_WIDTH_AM];
+        float complex pu_mult[PARTITION_WIDTH_AM];
+        float complex s_mult[PARTITION_WIDTH_AM];
+        float complex t_mult[PARTITION_WIDTH_AM];
 
         float samperr = 0;
-        for (int col = 0; col < 25; col++)
+        for (int col = 0; col < PARTITION_WIDTH_AM; col++)
         {
             int train1 = (5 + 11*col) % 32;
             int train2 = (21 + 11*col) % 32;
@@ -585,7 +585,7 @@ void sync_process_am(sync_t *st)
 
         for (int n = 0; n < BLKSZ; n++)
         {
-            for (int col = 0; col < 25; col++)
+            for (int col = 0; col < PARTITION_WIDTH_AM; col++)
             {
                 st->buffer[128-57-col][n] *= pl_mult[col];
                 st->buffer[128+57+col][n] *= pu_mult[col];

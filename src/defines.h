@@ -33,23 +33,30 @@
 #define P1_FRAME_LEN_AM 3750
 // bits per encoded P1 frame
 #define P1_FRAME_LEN_ENCODED_FM (P1_FRAME_LEN_FM * 5 / 2)
+#define P1_FRAME_LEN_ENCODED_AM (P1_FRAME_LEN_AM * 12 / 5)
 // bits per PIDS frame
 #define PIDS_FRAME_LEN 80
 // bits per encoded PIDS frame
 #define PIDS_FRAME_LEN_ENCODED_FM (PIDS_FRAME_LEN * 5 / 2)
 #define PIDS_FRAME_LEN_ENCODED_AM (PIDS_FRAME_LEN * 3)
 // bits per P3 frame
-#define P3_FRAME_LEN 4608
+#define P3_FRAME_LEN_FM 4608
+#define P3_FRAME_LEN_AM 24000
 // bits per encoded P3 frame
-#define P3_FRAME_LEN_ENCODED (P3_FRAME_LEN * 2)
+#define P3_FRAME_LEN_ENCODED_FM (P3_FRAME_LEN_FM * 2)
+#define P3_FRAME_LEN_ENCODED_AM (P3_FRAME_LEN_AM * 3 / 2)
 // bits per L2 PCI
 #define PCI_LEN 24
 // bytes per L2 PDU (max)
 #define MAX_PDU_LEN ((P1_FRAME_LEN_FM - PCI_LEN) / 8)
+// bytes per L2 PDU in P1 frame (AM)
+#define P1_PDU_LEN_AM 466
 // number of programs (max)
 #define MAX_PROGRAMS 8
 // number of streams per program (max)
 #define MAX_STREAMS 4
+// number of subcarriers per AM partition
+#define PARTITION_WIDTH_AM 25
 
 #define U8_F(x) ( (((float)(x)) - 127) / 128 )
 #define U8_Q15(x) ( ((int16_t)(x) - 127) * 64 )

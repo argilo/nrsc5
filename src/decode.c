@@ -33,11 +33,11 @@ static int eu_delay[] = { 2, 3, 5, 4 };
 static int pids_il_delay[] = { 0, 1, 12, 13, 6, 5, 18, 17, 11, 7, 23, 19 };
 static int pids_iu_delay[] = { 2, 4, 14, 16, 3, 8, 15, 20, 9, 10, 21, 22 };
 
-static int bit_map(unsigned char matrix[25 * BLKSZ * 8], int b, int k, int p)
+static int bit_map(unsigned char matrix[PARTITION_WIDTH_AM * BLKSZ * 8], int b, int k, int p)
 {
     int col = (9*k) % 25;
     int row = (11*col + 16*(k/25) + 11*(k/50)) % 32;
-    return (matrix[25 * (b*BLKSZ + row) + col] >> p) & 1;
+    return (matrix[PARTITION_WIDTH_AM * (b*BLKSZ + row) + col] >> p) & 1;
 }
 
 static void interleaver_ma1(decode_t *st)
@@ -118,7 +118,7 @@ static void interleaver_ma1(decode_t *st)
     }
 
     offset = 0;
-    for (int i = 0; i < 72000; i++)
+    for (int i = 0; i < P3_FRAME_LEN_AM * 3; i++)
     {
         switch (i % 6)
         {
@@ -176,7 +176,7 @@ static int bit_errors_p1_am(int8_t *coded, uint8_t *decoded)
 static int bit_errors_p3_am(int8_t *coded, uint8_t *decoded)
 {
     uint8_t puncture[] = {1, 0, 1, 1, 0, 0};
-    return bit_errors(coded, decoded, 9, 24000, 0561, 0753, 0711, puncture, 6);
+    return bit_errors(coded, decoded, 9, P3_FRAME_LEN_AM, 0561, 0753, 0711, puncture, 6);
 }
 
 static void descramble(uint8_t *buf, unsigned int length)
@@ -253,7 +253,7 @@ void decode_process_p3(decode_t *st)
     const unsigned int bk_bits = 32 * C;
     const unsigned int bk_adj = 32 * C - 1;
     unsigned int i, out = 0;
-    for (i = 0; i < P3_FRAME_LEN_ENCODED; i++)
+    for (i = 0; i < P3_FRAME_LEN_ENCODED_FM; i++)
     {
         int partition = ((st->i_p3 + 2 * (M / 4)) / M) % J;
         unsigned int pti = (st->pt_p3[partition])++;
@@ -270,8 +270,8 @@ void decode_process_p3(decode_t *st)
     if (st->ready_p3)
     {
         nrsc5_conv_decode_p3(st->viterbi_p3, st->scrambler_p3);
-        descramble(st->scrambler_p3, P3_FRAME_LEN);
-        frame_push(&st->input->frame, st->scrambler_p3, P3_FRAME_LEN);
+        descramble(st->scrambler_p3, P3_FRAME_LEN_FM);
+        frame_push(&st->input->frame, st->scrambler_p3, P3_FRAME_LEN_FM);
     }
     if (st->i_p3 == N)
     {
@@ -326,17 +326,17 @@ void decode_process_p1_p3_am(decode_t *st)
 
     for (int block = 0; block < 8; block++)
     {
-        nrsc5_conv_decode_e1(st->viterbi_p1_am + (block * 11250), st->scrambler_p1_am, P1_FRAME_LEN_AM);
-        total_errors += bit_errors_p1_am(st->viterbi_p1_am + (block * 11250), st->scrambler_p1_am);
+        nrsc5_conv_decode_e1(st->viterbi_p1_am + (block * P1_FRAME_LEN_AM * 3), st->scrambler_p1_am, P1_FRAME_LEN_AM);
+        total_errors += bit_errors_p1_am(st->viterbi_p1_am + (block * P1_FRAME_LEN_AM * 3), st->scrambler_p1_am);
         descramble(st->scrambler_p1_am, P1_FRAME_LEN_AM);
         frame_push(&st->input->frame, st->scrambler_p1_am, P1_FRAME_LEN_AM);
     }
-    nrsc5_conv_decode_e2(st->viterbi_p3_am, st->scrambler_p3_am, 24000);
+    nrsc5_conv_decode_e2(st->viterbi_p3_am, st->scrambler_p3_am, P3_FRAME_LEN_AM);
     total_errors += bit_errors_p3_am(st->viterbi_p3_am, st->scrambler_p3_am);
-    descramble(st->scrambler_p3_am, 24000);
-    frame_push(&st->input->frame, st->scrambler_p3_am, 24000);
+    descramble(st->scrambler_p3_am, P3_FRAME_LEN_AM);
+    frame_push(&st->input->frame, st->scrambler_p3_am, P3_FRAME_LEN_AM);
 
-    nrsc5_report_ber(st->input->radio, (float) total_errors / (9000 * 8 + 36000));
+    nrsc5_report_ber(st->input->radio, (float) total_errors / (8 * P1_FRAME_LEN_ENCODED_AM + P3_FRAME_LEN_ENCODED_AM));
 }
 
 void decode_reset(decode_t *st)

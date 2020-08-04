@@ -484,7 +484,7 @@ void frame_process(frame_t *st, size_t length)
         if (!fix_header(st, st->buffer + offset))
         {
             // go back to coarse sync if we fail to decode any audio packets in a P1 frame
-            if ((length == MAX_PDU_LEN || length == 466) && offset == 0)
+            if ((length == MAX_PDU_LEN || length == P1_PDU_LEN_AM) && offset == 0)
                 input_set_sync_state(st->input, SYNC_STATE_NONE);
             return;
         }
@@ -564,7 +564,7 @@ void frame_push(frame_t *st, uint8_t *bits, size_t length)
         offset = 1248;
         pci_len = 24;
         break;
-    case P3_FRAME_LEN:
+    case P3_FRAME_LEN_FM:
         start = 120;
         offset = 184;
         pci_len = 24;
@@ -574,7 +574,7 @@ void frame_push(frame_t *st, uint8_t *bits, size_t length)
         offset = 160;
         pci_len = 22;
         break;
-    case 24000:
+    case P3_FRAME_LEN_AM:
         start = 120;
         offset = 992;
         pci_len = 24;
