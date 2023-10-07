@@ -23,6 +23,8 @@ class NRSC5CLI:
         self.iq_output = None
         self.wav_output = None
         self.hdc_output = None
+        self.last_seq = -1
+        self.file_num = 10
 
     def parse_args(self):
         parser = argparse.ArgumentParser(description="Receive NRSC-5 signals.")
@@ -236,6 +238,15 @@ class NRSC5CLI:
         elif evt_type == nrsc5.EventType.STREAM:
             logging.info("Stream data: port=%04X seq=%04X mime=%s size=%s",
                          evt.port, evt.seq, evt.mime, len(evt.data))
+            if evt.mime == nrsc5.MIMEType.HERE_IMAGE:
+                if evt.seq != self.last_seq + 1:
+                    print("missed stream", evt.seq, file=sys.stderr)
+                    self.file_num += 1
+                else:
+                    print("             OK", evt.seq, file=sys.stderr)
+                with open(f"image{self.file_num}.dat", "ab") as f:
+                    f.write(evt.data)
+                self.last_seq = evt.seq
         elif evt_type == nrsc5.EventType.PACKET:
             logging.info("Packet data: port=%04X seq=%04X mime=%s size=%s",
                          evt.port, evt.seq, evt.mime, len(evt.data))

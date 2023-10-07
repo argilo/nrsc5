@@ -309,6 +309,12 @@ static void parse_sig(output_t *st, uint8_t *buf, unsigned int len)
         return;
     }
 
+    fprintf(stderr, "SIG Service: ");
+    for (int i = 0; i < len; i++) {
+        fprintf(stderr, "%02x ", buf[i]);
+    }
+    fprintf(stderr, "\n");
+
     memset(st->ports, 0, sizeof(st->ports));
     memset(st->services, 0, sizeof(st->services));
 
@@ -490,9 +496,16 @@ static void process_port(output_t *st, uint16_t port_id, uint16_t seq, uint8_t *
             return;
         }
         uint8_t hdrlen = buf[0];
-        // uint8_t repeat = buf[1];
+        uint8_t repeat = buf[1];
         uint16_t lot = buf[2] | (buf[3] << 8);
         uint32_t seq = buf[4] | (buf[5] << 8) | (buf[6] << 16) | ((uint32_t)buf[7] << 24);
+
+        fprintf(stderr, "LOT: lot=%05d seq=%02d hdrlen=%02d repeat=%d ", lot, seq, hdrlen, repeat);
+        // for (int i = 0; i < len; i++) {
+        //     fprintf(stderr, "%02x ", buf[i]);
+        // }
+        fprintf(stderr, "\n");
+
         if (hdrlen < 8 || hdrlen > len)
         {
             log_warn("wrong header len (port %04X, len %d, hdrlen %d)", port_id, len, hdrlen);
@@ -611,6 +624,7 @@ void output_aas_push(output_t *st, uint8_t *buf, unsigned int len)
     else if (port == 0x20)
     {
         // Station Information Guide
+        log_debug("SIG seq=%d", seq);
         parse_sig(st, buf + 4, len - 4);
     }
     else if (port >= 0x401 && port <= 0x50FF)
